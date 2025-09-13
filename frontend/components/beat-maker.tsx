@@ -104,10 +104,12 @@ export default function BeatMaker() {
           const newTime = prev + 0.25; // quarter beat increments
           
           // Check if any blocks should start playing at this time
-          blocks.forEach(block => {
+          blocks.forEach((block, blockIndex) => {
             const track = tracks[block.track];
+            console.log(`🔍 Block ${blockIndex}: "${block.name}" (track index ${block.track}) -> track: ${track?.name || 'undefined'}`);
             if (track && (track.audioFile || track.audioBlob) && !track.muted) {
               const audioElement = trackAudioRefs.current.get(track.id);
+              console.log(`🔍 Track "${track.name}" (ID: ${track.id}) has audio element: ${!!audioElement}`);
               
               if (audioElement) {
                 // Check if blue line just entered this block
@@ -121,14 +123,37 @@ export default function BeatMaker() {
                 const isResumingInBlock = justResumed && isInBlock;
                 
                 if ((wasBeforeBlock && isInBlock) || isStartingAtZero || isResumingInBlock) {
-                  console.log(`🎶 Triggering audio for "${block.name}" - wasBeforeBlock: ${wasBeforeBlock}, isStartingAtZero: ${isStartingAtZero}, isResumingInBlock: ${isResumingInBlock}, justResumed: ${justResumed}`);
-                  audioElement.currentTime = 0;
+                  console.log(`🎶 TRIGGERING AUDIO for Block ${blockIndex}: "${block.name}" on track ${block.track}`);
+                  
+                  // Calculate correct audio position based on timeline position within the block
+                  const timeIntoBlock = newTime - block.startTime;
+                  const secondsPerMeasure = 60 / bpm * 4; // 4 beats per measure at current BPM
+                  const audioPosition = timeIntoBlock * secondsPerMeasure;
+                  
+                  // Set audio to correct position (or 0 for new entries)
+                  if (isResumingInBlock && audioPosition > 0) {
+                    // When jumping to middle of block, start audio at correct position
+                    audioElement.currentTime = Math.max(0, Math.min(audioPosition, audioElement.duration || 0));
+                  } else {
+                    // When entering block normally, start from beginning
+                    audioElement.currentTime = 0;
+                  }
+                  
                   audioElement.volume = track.volume / 100;
-                  audioElement.play().then(() => {
-                    console.log(`✅ Playing ${block.name}`);
-                  }).catch(error => {
-                    console.error(`❌ Failed to play ${block.name}:`, error);
-                  });
+                  
+                  // Force immediate play without promises to avoid timing issues
+                  try {
+                    const playPromise = audioElement.play();
+                    if (playPromise !== undefined) {
+                      playPromise.then(() => {
+                        console.log(`✅ PLAYING Block ${blockIndex}: "${block.name}" on track ${block.track}`);
+                      }).catch(error => {
+                        console.error(`❌ FAILED Block ${blockIndex}: "${block.name}" on track ${block.track}:`, error);
+                      });
+                    }
+                  } catch (error) {
+                    console.error(`❌ IMMEDIATE FAIL Block ${blockIndex}: "${block.name}" on track ${block.track}:`, error);
+                  }
                 }
                 
                 // Check if blue line just exited this block
@@ -136,10 +161,12 @@ export default function BeatMaker() {
                 const isAfterBlock = newTime >= (block.startTime + block.duration);
                 
                 if (wasInBlock && isAfterBlock) {
-                  console.log(`⏹️ Blue line exited block "${block.name}" at time ${newTime}`);
+                  console.log(`⏹️ Blue line exited block "${block.name}" on track ${block.track} at time ${newTime}`);
                   audioElement.pause();
                   audioElement.currentTime = 0;
                 }
+              } else {
+                console.warn(`⚠️ No audio element found for track ${track.id} (block: ${block.name})`);
               }
             }
           });
@@ -183,19 +210,87 @@ export default function BeatMaker() {
         audioElement.currentTime = 0;
       }
     });
+    
+    setJustResumed(true); // Trigger audio check for position 0
   };
 
   const fastForward = () => {
     const skipAmount = 8; // Skip forward 8 measures
     const newTime = Math.min(currentTime + skipAmount, TIMELINE_MEASURES - 1);
+    
+    // Stop all currently playing audio
+    trackAudioRefs.current.forEach(audioElement => {
+      audioElement.pause();
+      audioElement.currentTime = 0;
+    });
+    
     setCurrentTime(newTime);
+    
+    // If playing, immediately check for blocks at new position and start audio
+    if (isPlaying) {
+      setTimeout(() => {
+        blocks.forEach(block => {
+          const track = tracks[block.track];
+          if (track && (track.audioFile || track.audioBlob) && !track.muted) {
+            const audioElement = trackAudioRefs.current.get(track.id);
+            const isInBlock = newTime >= block.startTime && newTime < (block.startTime + block.duration);
+            
+            if (audioElement && isInBlock) {
+              // Calculate correct audio position
+              const timeIntoBlock = newTime - block.startTime;
+              const secondsPerMeasure = 60 / bpm * 4;
+              const audioPosition = timeIntoBlock * secondsPerMeasure;
+              
+              audioElement.currentTime = Math.max(0, Math.min(audioPosition, audioElement.duration || 0));
+              audioElement.volume = track.volume / 100;
+              audioElement.play().catch(console.error);
+              console.log(`🎶 Started audio for "${block.name}" at position ${audioElement.currentTime}s`);
+            }
+          }
+        });
+      }, 50); // Small delay to ensure state update
+    }
+    
     console.log(`⏩ Fast forward to time ${newTime}`);
   };
 
   const rewind = () => {
     const skipAmount = 8; // Skip backward 8 measures
     const newTime = Math.max(currentTime - skipAmount, 0);
+    
+    // Stop all currently playing audio
+    trackAudioRefs.current.forEach(audioElement => {
+      audioElement.pause();
+      audioElement.currentTime = 0;
+    });
+    
     setCurrentTime(newTime);
+    
+    // If playing, immediately check for blocks at new position and start audio
+    if (isPlaying) {
+      setTimeout(() => {
+        blocks.forEach(block => {
+          const track = tracks[block.track];
+          if (track && (track.audioFile || track.audioBlob) && !track.muted) {
+            const audioElement = trackAudioRefs.current.get(track.id);
+            const isInBlock = newTime >= block.startTime && newTime < (block.startTime + block.duration);
+            
+            if (audioElement && isInBlock) {
+              // Calculate correct audio position
+              const timeIntoBlock = newTime - block.startTime;
+              const secondsPerMeasure = 60 / bpm * 4;
+              const audioPosition = timeIntoBlock * secondsPerMeasure;
+              
+              audioElement.currentTime = Math.max(0, Math.min(audioPosition, audioElement.duration || 0));
+              audioElement.volume = track.volume / 100;
+              audioElement.play().catch(console.error);
+              console.log(`🎶 Started audio for "${block.name}" at position ${audioElement.currentTime}s`);
+            }
+          }
+        });
+      }, 50); // Small delay to ensure state update
+    }
+    
     console.log(`⏪ Rewind to time ${newTime}`);
   };
 
