@@ -535,13 +535,13 @@ async def start_track_generation(request: TrackGenerationRequest):
 @app.get("/get_generated_track")
 async def get_generated_track(task_id: str):
     """
-    Get the status and download URL for a generated track.
+    Get the status and all MP3 URLs for a generated track.
     
     Args:
         task_id: The task ID returned from start_track_generation
         
     Returns:
-        The track status and metadata, or the audio file if completed
+        The track status and metadata with all MP3 URLs (track_url, bass, chords, melody, percussion) if completed
     """
     try:
         # Send request to Beatoven AI to check task status
@@ -559,24 +559,25 @@ async def get_generated_track(task_id: str):
             if task_data.get("status") in ["running", "composing"]:
                 return task_data
             
-            # If track is composed, download and return the audio file
+            # If track is composed, return all MP3 URLs
             if task_data.get("status") == "composed" and "meta" in task_data:
-                track_url = task_data["meta"].get("track_url")
-                if not track_url:
-                    raise HTTPException(status_code=500, detail="Track URL not found in response")
+                meta = task_data["meta"]
                 
-                # Download the audio file
-                audio_response = await client.get(track_url, timeout=60.0)
-                audio_response.raise_for_status()
+                # Extract all MP3 URLs from the response
+                mp3_urls = {
+                    "track_url": meta.get("track_url"),
+                    "bass": meta.get("stems_url", {}).get("bass"),
+                    "chords": meta.get("stems_url", {}).get("chords"), 
+                    "melody": meta.get("stems_url", {}).get("melody"),
+                    "percussion": meta.get("stems_url", {}).get("percussion")
+                }
                 
-                # Return the audio file
-                return Response(
-                    content=audio_response.content,
-                    media_type="audio/mpeg",
-                    headers={
-                        "Content-Disposition": f"attachment; filename=generated_track_{task_id}.mp3"
-                    }
-                )
+                # Return the complete response with all MP3 URLs
+                return {
+                    "status": task_data["status"],
+                    "meta": meta,
+                    "mp3_urls": mp3_urls
+                }
             
             # For any other status, return the raw response
             return task_data
