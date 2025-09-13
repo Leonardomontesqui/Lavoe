@@ -56,6 +56,7 @@ export default function BeatMaker() {
   const [tracksRefreshTrigger, setTracksRefreshTrigger] = useState(0);
   const [isGeneratingTrack, setIsGeneratingTrack] = useState(false);
   const [generationStatus, setGenerationStatus] = useState<string>("");
+  const [justResumed, setJustResumed] = useState(false);
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -93,9 +94,10 @@ export default function BeatMaker() {
       }
       
       setIsPlaying(true);
+      setJustResumed(true);
       
       // Audio will be triggered by blocks during timeline progression
-      console.log(`🎵 Playback started, will trigger audio based on block positions`);
+      console.log(`🎵 Playback started, justResumed set to true`);
       
       intervalRef.current = setInterval(() => {
         setCurrentTime((prev) => {
@@ -115,8 +117,11 @@ export default function BeatMaker() {
                 // Special case: if block starts at 0 and we're at the beginning of playback
                 const isStartingAtZero = block.startTime === 0 && prev === 0 && newTime >= 0;
                 
-                if ((wasBeforeBlock && isInBlock) || isStartingAtZero) {
-                  console.log(`🎶 Blue line hit block "${block.name}" at time ${newTime}`);
+                // Check if we just resumed playback and the cursor is inside a block
+                const isResumingInBlock = justResumed && isInBlock;
+                
+                if ((wasBeforeBlock && isInBlock) || isStartingAtZero || isResumingInBlock) {
+                  console.log(`🎶 Triggering audio for "${block.name}" - wasBeforeBlock: ${wasBeforeBlock}, isStartingAtZero: ${isStartingAtZero}, isResumingInBlock: ${isResumingInBlock}, justResumed: ${justResumed}`);
                   audioElement.currentTime = 0;
                   audioElement.volume = track.volume / 100;
                   audioElement.play().then(() => {
@@ -139,6 +144,12 @@ export default function BeatMaker() {
             }
           });
           
+          // Clear the justResumed flag after the first tick
+          if (justResumed) {
+            console.log(`🔄 Clearing justResumed flag after first tick`);
+            setJustResumed(false);
+          }
+          
           return newTime >= TIMELINE_MEASURES ? 0 : newTime;
         });
       }, (60 / bpm / 4) * 1000); // quarter note timing based on BPM
@@ -147,6 +158,8 @@ export default function BeatMaker() {
 
   const stopPlayback = () => {
     setIsPlaying(false);
+    setJustResumed(false); // Reset resume flag when stopping
+    
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
@@ -156,6 +169,8 @@ export default function BeatMaker() {
     trackAudioRefs.current.forEach(audioElement => {
       audioElement.pause();
     });
+    
+    console.log(`⏸️ Playback stopped, justResumed reset to false`);
   };
 
   const resetPlayback = () => {
@@ -168,6 +183,20 @@ export default function BeatMaker() {
         audioElement.currentTime = 0;
       }
     });
+  };
+
+  const fastForward = () => {
+    const skipAmount = 8; // Skip forward 8 measures
+    const newTime = Math.min(currentTime + skipAmount, TIMELINE_MEASURES - 1);
+    setCurrentTime(newTime);
+    console.log(`⏩ Fast forward to time ${newTime}`);
+  };
+
+  const rewind = () => {
+    const skipAmount = 8; // Skip backward 8 measures
+    const newTime = Math.max(currentTime - skipAmount, 0);
+    setCurrentTime(newTime);
+    console.log(`⏪ Rewind to time ${newTime}`);
   };
 
   const handleBlockClick = (blockId: string) => {
@@ -684,6 +713,8 @@ export default function BeatMaker() {
           onStart={startPlayback}
           onStop={stopPlayback}
           onReset={resetPlayback}
+          onFastForward={fastForward}
+          onRewind={rewind}
         />
         <BeatTimeline
           currentTime={currentTime}
