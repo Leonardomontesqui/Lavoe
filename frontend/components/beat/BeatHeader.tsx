@@ -11,6 +11,7 @@ export interface BeatHeaderProps {
   onReset: () => void;
   onFastForward: () => void;
   onRewind: () => void;
+  onExport: () => void;
 }
 
 export default function BeatHeader({
@@ -21,6 +22,7 @@ export default function BeatHeader({
   onReset,
   onFastForward,
   onRewind,
+  onExport,
 }: BeatHeaderProps) {
   return (
     <div className="p-6 border-b border-border">
@@ -57,7 +59,7 @@ export default function BeatHeader({
         
         {/* Right export button */}
         <div className="flex-1 flex justify-end">
-          <Button variant="outline" size="lg">
+          <Button onClick={onExport} variant="outline" size="lg">
             Export
           </Button>
         </div>
