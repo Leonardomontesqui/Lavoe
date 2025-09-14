@@ -56,6 +56,7 @@ export default function BeatMaker() {
   const [tracksRefreshTrigger, setTracksRefreshTrigger] = useState(0);
   const [isGeneratingTrack, setIsGeneratingTrack] = useState(false);
   const [generationStatus, setGenerationStatus] = useState<string>("");
+  const [justResumed, setJustResumed] = useState(false);
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -93,37 +94,80 @@ export default function BeatMaker() {
       }
       
       setIsPlaying(true);
+      setJustResumed(true);
       
       // Audio will be triggered by blocks during timeline progression
-      console.log(`🎵 Playback started, will trigger audio based on block positions`);
+      console.log(`🎵 Playback started, justResumed set to true`);
+      console.log(`🎵 Current blocks:`, blocks.map(b => ({ name: b.name, startTime: b.startTime, duration: b.duration, track: b.track })));
+      console.log(`🎵 Current tracks:`, tracks.map(t => ({ name: t.name, id: t.id, hasAudio: !!(t.audioFile || t.audioBlob) })));
       
       intervalRef.current = setInterval(() => {
         setCurrentTime((prev) => {
           const newTime = prev + 0.25; // quarter beat increments
           
+          // Log timeline progress every measure
+          if (newTime % 4 === 0) {
+            console.log(`⏰ Timeline: ${newTime} measures, ${blocks.length} blocks total`);
+          }
+          
           // Check if any blocks should start playing at this time
-          blocks.forEach(block => {
+          blocks.forEach((block, blockIndex) => {
             const track = tracks[block.track];
             if (track && (track.audioFile || track.audioBlob) && !track.muted) {
               const audioElement = trackAudioRefs.current.get(track.id);
               
               if (audioElement) {
-                // Check if blue line just entered this block
-                const wasBeforeBlock = prev < block.startTime;
+                // Check if cursor is in this block
                 const isInBlock = newTime >= block.startTime && newTime < (block.startTime + block.duration);
+                const wasBeforeBlock = prev < block.startTime;
+                const justEnteredBlock = wasBeforeBlock && isInBlock;
                 
-                // Special case: if block starts at 0 and we're at the beginning of playback
-                const isStartingAtZero = block.startTime === 0 && prev === 0 && newTime >= 0;
+                // Check if resuming playback while in block
+                const resumingInBlock = justResumed && isInBlock;
                 
-                if ((wasBeforeBlock && isInBlock) || isStartingAtZero) {
-                  console.log(`🎶 Blue line hit block "${block.name}" at time ${newTime}`);
-                  audioElement.currentTime = 0;
+                // Check if starting playback and cursor is already in block
+                const startingInBlock = prev === 0 && isInBlock;
+                
+                // Debug logging when near block
+                if (Math.abs(newTime - block.startTime) <= 1) {
+                  console.log(`🔍 Block "${block.name}": start=${block.startTime}, current=${newTime}, prev=${prev}`);
+                  console.log(`🔍 justEnteredBlock=${justEnteredBlock}, resumingInBlock=${resumingInBlock}, startingInBlock=${startingInBlock}`);
+                  console.log(`🔍 isInBlock=${isInBlock}, wasBeforeBlock=${wasBeforeBlock}, justResumed=${justResumed}`);
+                }
+                
+                if (justEnteredBlock || resumingInBlock || startingInBlock) {
+                  console.log(`🎶 TRIGGERING AUDIO for Block "${block.name}" on track ${block.track}`);
+                  console.log(`🎶 Trigger reason: justEnteredBlock=${justEnteredBlock}, resumingInBlock=${resumingInBlock}, startingInBlock=${startingInBlock}`);
+                  
+                  // Calculate correct audio position based on timeline position within the block
+                  const timeIntoBlock = newTime - block.startTime;
+                  const secondsPerMeasure = 60 / bpm * 4; // 4 beats per measure at current BPM
+                  const audioPosition = timeIntoBlock * secondsPerMeasure;
+                  
+                  // Set audio to correct position (or 0 for new entries)
+                  if (resumingInBlock && audioPosition > 0) {
+                    // When jumping to middle of block, start audio at correct position
+                    audioElement.currentTime = Math.max(0, Math.min(audioPosition, audioElement.duration || 0));
+                  } else {
+                    // When entering block normally, start from beginning
+                    audioElement.currentTime = 0;
+                  }
+                  
                   audioElement.volume = track.volume / 100;
-                  audioElement.play().then(() => {
-                    console.log(`✅ Playing ${block.name}`);
-                  }).catch(error => {
-                    console.error(`❌ Failed to play ${block.name}:`, error);
-                  });
+                  
+                  // Force immediate play
+                  try {
+                    const playPromise = audioElement.play();
+                    if (playPromise !== undefined) {
+                      playPromise.then(() => {
+                        console.log(`✅ PLAYING "${block.name}" successfully`);
+                      }).catch(error => {
+                        console.error(`❌ FAILED to play "${block.name}":`, error);
+                      });
+                    }
+                  } catch (error) {
+                    console.error(`❌ IMMEDIATE FAIL "${block.name}":`, error);
+                  }
                 }
                 
                 // Check if blue line just exited this block
@@ -131,13 +175,21 @@ export default function BeatMaker() {
                 const isAfterBlock = newTime >= (block.startTime + block.duration);
                 
                 if (wasInBlock && isAfterBlock) {
-                  console.log(`⏹️ Blue line exited block "${block.name}" at time ${newTime}`);
+                  console.log(`⏹️ Blue line exited block "${block.name}" on track ${block.track} at time ${newTime}`);
                   audioElement.pause();
                   audioElement.currentTime = 0;
                 }
+              } else {
+                console.warn(`⚠️ No audio element found for track ${track.id} (block: ${block.name})`);
               }
             }
           });
+          
+          // Clear the justResumed flag after the first tick
+          if (justResumed) {
+            console.log(`🔄 Clearing justResumed flag after first tick`);
+            setJustResumed(false);
+          }
           
           return newTime >= TIMELINE_MEASURES ? 0 : newTime;
         });
@@ -147,6 +199,8 @@ export default function BeatMaker() {
 
   const stopPlayback = () => {
     setIsPlaying(false);
+    setJustResumed(false); // Reset resume flag when stopping
+    
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
@@ -156,6 +210,8 @@ export default function BeatMaker() {
     trackAudioRefs.current.forEach(audioElement => {
       audioElement.pause();
     });
+    
+    console.log(`⏸️ Playback stopped, justResumed reset to false`);
   };
 
   const resetPlayback = () => {
@@ -168,33 +224,229 @@ export default function BeatMaker() {
         audioElement.currentTime = 0;
       }
     });
+    
+    setJustResumed(true); // Trigger audio check for position 0
+  };
+
+  const fastForward = () => {
+    const skipAmount = 8; // Skip forward 8 measures
+    const newTime = Math.min(currentTime + skipAmount, TIMELINE_MEASURES - 1);
+    
+    // Stop all currently playing audio
+    trackAudioRefs.current.forEach(audioElement => {
+      audioElement.pause();
+      audioElement.currentTime = 0;
+    });
+    
+    setCurrentTime(newTime);
+    
+    // If playing, immediately check for blocks at new position and start audio
+    if (isPlaying) {
+      setTimeout(() => {
+        blocks.forEach(block => {
+          const track = tracks[block.track];
+          if (track && (track.audioFile || track.audioBlob) && !track.muted) {
+            const audioElement = trackAudioRefs.current.get(track.id);
+            const isInBlock = newTime >= block.startTime && newTime < (block.startTime + block.duration);
+            
+            if (audioElement && isInBlock) {
+              // Calculate correct audio position
+              const timeIntoBlock = newTime - block.startTime;
+              const secondsPerMeasure = 60 / bpm * 4;
+              const audioPosition = timeIntoBlock * secondsPerMeasure;
+              
+              audioElement.currentTime = Math.max(0, Math.min(audioPosition, audioElement.duration || 0));
+              audioElement.volume = track.volume / 100;
+              audioElement.play().catch(console.error);
+              console.log(`🎶 Started audio for "${block.name}" at position ${audioElement.currentTime}s`);
+            }
+          }
+        });
+      }, 50); // Small delay to ensure state update
+    }
+    
+    console.log(`⏩ Fast forward to time ${newTime}`);
+  };
+
+  const rewind = () => {
+    const skipAmount = 8; // Skip backward 8 measures
+    const newTime = Math.max(currentTime - skipAmount, 0);
+    
+    // Stop all currently playing audio
+    trackAudioRefs.current.forEach(audioElement => {
+      audioElement.pause();
+      audioElement.currentTime = 0;
+    });
+    
+    setCurrentTime(newTime);
+    
+    // If playing, immediately check for blocks at new position and start audio
+    if (isPlaying) {
+      setTimeout(() => {
+        blocks.forEach(block => {
+          const track = tracks[block.track];
+          if (track && (track.audioFile || track.audioBlob) && !track.muted) {
+            const audioElement = trackAudioRefs.current.get(track.id);
+            const isInBlock = newTime >= block.startTime && newTime < (block.startTime + block.duration);
+            
+            if (audioElement && isInBlock) {
+              // Calculate correct audio position
+              const timeIntoBlock = newTime - block.startTime;
+              const secondsPerMeasure = 60 / bpm * 4;
+              const audioPosition = timeIntoBlock * secondsPerMeasure;
+              
+              audioElement.currentTime = Math.max(0, Math.min(audioPosition, audioElement.duration || 0));
+              audioElement.volume = track.volume / 100;
+              
+              // Use Promise.resolve to ensure all tracks can play simultaneously
+              Promise.resolve().then(() => {
+                return audioElement.play();
+              }).then(() => {
+                console.log(`🎶 Started audio for "${block.name}" on track ${block.track} at position ${audioElement.currentTime}s`);
+              }).catch(error => {
+                console.error(`❌ Failed to play "${block.name}" on track ${block.track}:`, error);
+              });
+            }
+          }
+        });
+      }, 50); // Small delay to ensure state update
+    }
+    
+    console.log(`⏪ Rewind to time ${newTime}`);
+  };
+
+  const exportTimeline = async () => {
+    try {
+      console.log('🎵 Starting timeline export...');
+      
+      // Create an offline audio context for rendering
+      const sampleRate = 44100;
+      const timelineDurationInSeconds = (TIMELINE_MEASURES * 60 / bpm * 4); // Convert measures to seconds
+      const offlineContext = new OfflineAudioContext(2, sampleRate * timelineDurationInSeconds, sampleRate);
+      
+      const blockPositions: { buffer: AudioBuffer; startTime: number }[] = [];
+      
+      // Load all audio files and decode them
+      for (const block of blocks) {
+        const track = tracks[block.track];
+        if (track && (track.audioFile || track.audioBlob) && !track.muted) {
+          try {
+            const audioData = track.audioFile ? 
+              await track.audioFile.arrayBuffer() : 
+              await track.audioBlob!.arrayBuffer();
+            
+            const audioBuffer = await offlineContext.decodeAudioData(audioData);
+            
+            // Calculate start time in seconds
+            const startTimeInSeconds = (block.startTime * 60 / bpm * 4);
+            
+            blockPositions.push({
+              buffer: audioBuffer,
+              startTime: startTimeInSeconds
+            });
+            
+            console.log(`📁 Loaded "${block.name}" for export`);
+          } catch (error) {
+            console.error(`❌ Failed to load audio for "${block.name}":`, error);
+          }
+        }
+      }
+      
+      // Create audio sources and schedule them
+      blockPositions.forEach(({ buffer, startTime }) => {
+        const source = offlineContext.createBufferSource();
+        source.buffer = buffer;
+        source.connect(offlineContext.destination);
+        source.start(startTime);
+      });
+      
+      console.log('🎵 Rendering timeline...');
+      
+      // Render the audio
+      const renderedBuffer = await offlineContext.startRendering();
+      
+      // Convert to WAV and download
+      const wavBlob = audioBufferToWav(renderedBuffer);
+      const url = URL.createObjectURL(wavBlob);
+      
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `lavoe-timeline-${Date.now()}.wav`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      console.log('✅ Timeline exported successfully!');
+      
+    } catch (error) {
+      console.error('❌ Export failed:', error);
+      alert('Export failed. Please try again.');
+    }
+  };
+
+  // Helper function to convert AudioBuffer to WAV
+  const audioBufferToWav = (buffer: AudioBuffer): Blob => {
+    const length = buffer.length;
+    const numberOfChannels = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const arrayBuffer = new ArrayBuffer(44 + length * numberOfChannels * 2);
+    const view = new DataView(arrayBuffer);
+    
+    // WAV header
+    const writeString = (offset: number, string: string) => {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+      }
+    };
+    
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + length * numberOfChannels * 2, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, numberOfChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * numberOfChannels * 2, true);
+    view.setUint16(32, numberOfChannels * 2, true);
+    view.setUint16(34, 16, true);
+    writeString(36, 'data');
+    view.setUint32(40, length * numberOfChannels * 2, true);
+    
+    // Convert float samples to 16-bit PCM
+    let offset = 44;
+    for (let i = 0; i < length; i++) {
+      for (let channel = 0; channel < numberOfChannels; channel++) {
+        const sample = Math.max(-1, Math.min(1, buffer.getChannelData(channel)[i]));
+        view.setInt16(offset, sample * 0x7FFF, true);
+        offset += 2;
+      }
+    }
+    
+    return new Blob([arrayBuffer], { type: 'audio/wav' });
   };
 
   const handleBlockClick = (blockId: string) => {
     setSelectedBlock(selectedBlock === blockId ? null : blockId);
   };
 
-  const generateAIComponent = async (mode: "beat" | "agent" = "beat") => {
+  const handleAIGenerate = async () => {
     if (!aiPrompt.trim()) return;
 
-    if (mode === "beat") {
-      // Handle Beatmaker mode - generate actual tracks
-      await generateBeatovenTrack(aiPrompt);
-    } else {
-      // Handle Agent mode - simulate AI generation (existing behavior)
-      const newBlock: MusicBlock = {
-        id: `ai-block-${Date.now()}`,
-        name: aiPrompt,
-        type: "melody",
-        color: "bg-emerald-500",
-        startTime: Math.floor(Math.random() * 48),
-        duration: 8 + Math.floor(Math.random() * 16),
-        track: Math.floor(Math.random() * tracks.length),
-      };
+    // Handle Agent mode - simulate AI generation (existing behavior)
+    const newBlock: MusicBlock = {
+      id: `ai-block-${Date.now()}`,
+      name: aiPrompt,
+      type: "melody",
+      color: "bg-emerald-500",
+      startTime: Math.floor(Math.random() * 48),
+      duration: 8 + Math.floor(Math.random() * 16),
+      track: Math.floor(Math.random() * tracks.length),
+    };
 
-      setBlocks((prev) => [...prev, newBlock]);
-      setAiPrompt("");
-    }
+    setBlocks((prev) => [...prev, newBlock]);
+    setAiPrompt("");
   };
 
   const generateBeatovenTrack = async (prompt: string) => {
@@ -684,6 +936,9 @@ export default function BeatMaker() {
           onStart={startPlayback}
           onStop={stopPlayback}
           onReset={resetPlayback}
+          onFastForward={fastForward}
+          onRewind={rewind}
+          onExport={exportTimeline}
         />
         <BeatTimeline
           currentTime={currentTime}
@@ -701,7 +956,7 @@ export default function BeatMaker() {
       <AiSidebar
         aiPrompt={aiPrompt}
         setAiPrompt={setAiPrompt}
-        onSubmit={generateAIComponent}
+        onSubmit={handleAIGenerate}
         tracksRefreshTrigger={tracksRefreshTrigger}
         isGeneratingTrack={isGeneratingTrack}
         generationStatus={generationStatus}
