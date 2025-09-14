@@ -35,13 +35,13 @@ export function TracksSidebar({
     <div className="h-full bg-background flex flex-col">
       {/* Header with Logo */}
       <div className="h-14 flex items-center justify-front px-3">
-        <img src="/Lavoe.png" alt="Lavoe" className="h-5 w-auto" />
+        <img src="/Lavoe22.png" alt="Lavoe" className="h-5 w-auto" />
       </div>
 
       {/* Main Container */}
       <div className="flex-1 flex">
         {/* Left Navigation */}
-        <div className="w-[88px] border-r border-border flex flex-col">
+        <div className="w-[80px] border-r border-border flex flex-col">
           <div className="flex flex-col items-center pt-3 gap-2">
             <Button
               variant="ghost"

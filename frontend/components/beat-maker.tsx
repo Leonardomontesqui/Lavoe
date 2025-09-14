@@ -98,32 +98,46 @@ export default function BeatMaker() {
       
       // Audio will be triggered by blocks during timeline progression
       console.log(`🎵 Playback started, justResumed set to true`);
+      console.log(`🎵 Current blocks:`, blocks.map(b => ({ name: b.name, startTime: b.startTime, duration: b.duration, track: b.track })));
+      console.log(`🎵 Current tracks:`, tracks.map(t => ({ name: t.name, id: t.id, hasAudio: !!(t.audioFile || t.audioBlob) })));
       
       intervalRef.current = setInterval(() => {
         setCurrentTime((prev) => {
           const newTime = prev + 0.25; // quarter beat increments
           
+          // Log timeline progress every measure
+          if (newTime % 4 === 0) {
+            console.log(`⏰ Timeline: ${newTime} measures, ${blocks.length} blocks total`);
+          }
+          
           // Check if any blocks should start playing at this time
           blocks.forEach((block, blockIndex) => {
             const track = tracks[block.track];
-            console.log(`🔍 Block ${blockIndex}: "${block.name}" (track index ${block.track}) -> track: ${track?.name || 'undefined'}`);
             if (track && (track.audioFile || track.audioBlob) && !track.muted) {
               const audioElement = trackAudioRefs.current.get(track.id);
-              console.log(`🔍 Track "${track.name}" (ID: ${track.id}) has audio element: ${!!audioElement}`);
               
               if (audioElement) {
-                // Check if blue line just entered this block
-                const wasBeforeBlock = prev < block.startTime;
+                // Check if cursor is in this block
                 const isInBlock = newTime >= block.startTime && newTime < (block.startTime + block.duration);
+                const wasBeforeBlock = prev < block.startTime;
+                const justEnteredBlock = wasBeforeBlock && isInBlock;
                 
-                // Special case: if block starts at 0 and we're at the beginning of playback
-                const isStartingAtZero = block.startTime === 0 && prev === 0 && newTime >= 0;
+                // Check if resuming playback while in block
+                const resumingInBlock = justResumed && isInBlock;
                 
-                // Check if we just resumed playback and the cursor is inside a block
-                const isResumingInBlock = justResumed && isInBlock;
+                // Check if starting playback and cursor is already in block
+                const startingInBlock = prev === 0 && isInBlock;
                 
-                if ((wasBeforeBlock && isInBlock) || isStartingAtZero || isResumingInBlock) {
-                  console.log(`🎶 TRIGGERING AUDIO for Block ${blockIndex}: "${block.name}" on track ${block.track}`);
+                // Debug logging when near block
+                if (Math.abs(newTime - block.startTime) <= 1) {
+                  console.log(`🔍 Block "${block.name}": start=${block.startTime}, current=${newTime}, prev=${prev}`);
+                  console.log(`🔍 justEnteredBlock=${justEnteredBlock}, resumingInBlock=${resumingInBlock}, startingInBlock=${startingInBlock}`);
+                  console.log(`🔍 isInBlock=${isInBlock}, wasBeforeBlock=${wasBeforeBlock}, justResumed=${justResumed}`);
+                }
+                
+                if (justEnteredBlock || resumingInBlock || startingInBlock) {
+                  console.log(`🎶 TRIGGERING AUDIO for Block "${block.name}" on track ${block.track}`);
+                  console.log(`🎶 Trigger reason: justEnteredBlock=${justEnteredBlock}, resumingInBlock=${resumingInBlock}, startingInBlock=${startingInBlock}`);
                   
                   // Calculate correct audio position based on timeline position within the block
                   const timeIntoBlock = newTime - block.startTime;
@@ -131,7 +145,7 @@ export default function BeatMaker() {
                   const audioPosition = timeIntoBlock * secondsPerMeasure;
                   
                   // Set audio to correct position (or 0 for new entries)
-                  if (isResumingInBlock && audioPosition > 0) {
+                  if (resumingInBlock && audioPosition > 0) {
                     // When jumping to middle of block, start audio at correct position
                     audioElement.currentTime = Math.max(0, Math.min(audioPosition, audioElement.duration || 0));
                   } else {
@@ -141,18 +155,18 @@ export default function BeatMaker() {
                   
                   audioElement.volume = track.volume / 100;
                   
-                  // Force immediate play without promises to avoid timing issues
+                  // Force immediate play
                   try {
                     const playPromise = audioElement.play();
                     if (playPromise !== undefined) {
                       playPromise.then(() => {
-                        console.log(`✅ PLAYING Block ${blockIndex}: "${block.name}" on track ${block.track}`);
+                        console.log(`✅ PLAYING "${block.name}" successfully`);
                       }).catch(error => {
-                        console.error(`❌ FAILED Block ${blockIndex}: "${block.name}" on track ${block.track}:`, error);
+                        console.error(`❌ FAILED to play "${block.name}":`, error);
                       });
                     }
                   } catch (error) {
-                    console.error(`❌ IMMEDIATE FAIL Block ${blockIndex}: "${block.name}" on track ${block.track}:`, error);
+                    console.error(`❌ IMMEDIATE FAIL "${block.name}":`, error);
                   }
                 }
                 
