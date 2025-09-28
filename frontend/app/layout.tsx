@@ -4,6 +4,7 @@ import { GeistMono } from "geist/font/mono";
 import { Analytics } from "@vercel/analytics/next";
 import { ppEditorialNew } from "@/lib/fonts";
 import "./globals.css";
+import { AuthGate } from "@/components/auth/AuthGate";
 
 export const metadata: Metadata = {
   title: "Lavoe",
@@ -21,7 +22,7 @@ export default function RootLayout({
       <body
         className={`font-sans ${GeistSans.variable} ${GeistMono.variable} ${ppEditorialNew.variable}`}
       >
-        {children}
+        <AuthGate>{children}</AuthGate>
         <Analytics />
       </body>
     </html>

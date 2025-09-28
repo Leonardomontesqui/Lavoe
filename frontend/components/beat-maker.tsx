@@ -7,6 +7,7 @@ import AiSidebar from "@/components/beat/AiSidebar";
 import AgenticBlurOverlay from "@/components/beat/AgenticBlurOverlay";
 import { TracksSidebar } from "@/components/beat/TracksSidebar";
 import { MusicBlock, Track } from "@/components/beat/types";
+import { authFetch } from "@/lib/authFetch";
 
 const initialTracks: Track[] = [];
 
@@ -365,7 +366,10 @@ export default function BeatMaker() {
       setGenerationStatus("Starting track generation...");
 
       // Start track generation
-      const response = await fetch(
+      console.log("Beatoven: POST /start_track_generation (prompt)", {
+        prompt,
+      });
+      const response = await authFetch(
         "http://localhost:8000/start_track_generation",
         {
           method: "POST",
@@ -381,11 +385,18 @@ export default function BeatMaker() {
       );
 
       if (!response.ok) {
+        const text = await response.text();
+        console.error(
+          "Beatoven: start generation failed",
+          response.status,
+          text
+        );
         throw new Error("Failed to start track generation");
       }
 
       const result = await response.json();
       const taskId = result.task_id;
+      console.log("Beatoven: task started", { taskId, result });
 
       setAiPrompt("");
       setGenerationStatus("Track generation in progress...");
@@ -410,15 +421,22 @@ export default function BeatMaker() {
       try {
         attempts++;
 
-        const response = await fetch(
+        console.log("Beatoven: GET /get_generated_track", {
+          taskId,
+          attempt: attempts,
+        });
+        const response = await authFetch(
           `http://localhost:8000/get_generated_track?task_id=${taskId}`
         );
 
         if (!response.ok) {
+          const text = await response.text();
+          console.error("Beatoven: poll failed", response.status, text);
           throw new Error("Failed to check track status");
         }
 
         const result = await response.json();
+        console.log("Beatoven: poll result", result);
 
         if (result.status === "composed") {
           // Track generation completed - the tracks are now stored in our system
@@ -492,7 +510,8 @@ export default function BeatMaker() {
       setGenerationStatus("Starting Mubert track generation...");
 
       // Start track generation
-      const response = await fetch(
+      console.log("Mubert: POST /start_mubert_generation", { prompt });
+      const response = await authFetch(
         "http://localhost:8000/start_mubert_generation",
         {
           method: "POST",
@@ -511,11 +530,14 @@ export default function BeatMaker() {
       );
 
       if (!response.ok) {
+        const text = await response.text();
+        console.error("Mubert: start failed", response.status, text);
         throw new Error("Failed to start Mubert track generation");
       }
 
       const result = await response.json();
       const trackId = result.track_id;
+      console.log("Mubert: started", { trackId, result });
 
       setAiPrompt("");
       setGenerationStatus("Track generation in progress...");
@@ -545,15 +567,22 @@ export default function BeatMaker() {
       try {
         attempts++;
 
-        const response = await fetch(
+        console.log("Mubert: GET /get_mubert_track", {
+          trackId,
+          attempt: attempts,
+        });
+        const response = await authFetch(
           `http://localhost:8000/get_mubert_track?track_id=${trackId}`
         );
 
         if (!response.ok) {
+          const text = await response.text();
+          console.error("Mubert: poll failed", response.status, text);
           throw new Error("Failed to check Mubert track status");
         }
 
         const result = await response.json();
+        console.log("Mubert: poll result", result);
 
         if (result.status === "completed") {
           // Track generation completed - the track is now stored in our system
@@ -689,7 +718,7 @@ export default function BeatMaker() {
       const formData = new FormData();
       formData.append("file", file);
 
-      const response = await fetch("http://localhost:8000/upload-audio", {
+      const response = await authFetch("http://localhost:8000/upload-audio", {
         method: "POST",
         body: formData,
       });
@@ -780,7 +809,7 @@ export default function BeatMaker() {
       const formData = new FormData();
       formData.append("file", audioBlob, `${trackName}.wav`);
 
-      const response = await fetch("http://localhost:8000/upload-audio", {
+      const response = await authFetch("http://localhost:8000/upload-audio", {
         method: "POST",
         body: formData,
       });
@@ -887,14 +916,16 @@ export default function BeatMaker() {
   const handleAddTrackToEditor = async (trackId: string, filename: string) => {
     try {
       // Download the track from the backend
-      const response = await fetch(
+      const response = await authFetch(
         `http://localhost:8000/tracks/${trackId}/download`
       );
       if (!response.ok) {
         throw new Error("Failed to download track");
       }
 
-      const audioBlob = await response.blob();
+      const { url: signedUrl } = await response.json();
+      const blobResp = await fetch(signedUrl);
+      const audioBlob = await blobResp.blob();
       const audioFile = new File([audioBlob], filename, {
         type: audioBlob.type,
       });
@@ -1016,7 +1047,7 @@ export default function BeatMaker() {
 
     try {
       // Call the backend speed adjustment endpoint
-      const response = await fetch(`http://localhost:8000/process/speed`, {
+      const response = await authFetch(`http://localhost:8000/process/speed`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1035,7 +1066,7 @@ export default function BeatMaker() {
       console.log("🏃 Speed adjustment result:", result);
 
       // Download the new track
-      const trackResponse = await fetch(
+      const trackResponse = await authFetch(
         `http://localhost:8000/tracks/${result.track_id}/download`
       );
       if (!trackResponse.ok) {
@@ -1043,9 +1074,9 @@ export default function BeatMaker() {
           `Failed to download processed track: ${trackResponse.statusText}`
         );
       }
-
-      const arrayBuffer = await trackResponse.arrayBuffer();
-      const audioBlob = new Blob([arrayBuffer], { type: "audio/wav" });
+      const { url: signedUrl2 } = await trackResponse.json();
+      const blobResp2 = await fetch(signedUrl2);
+      const audioBlob = await blobResp2.blob();
       const audioFile = new File(
         [audioBlob],
         result.metadata.filename || "speed_adjusted.wav",
@@ -1102,30 +1133,33 @@ export default function BeatMaker() {
 
   const handleLoop = (blockId: string, times: number) => {
     console.log(`🔄 Looping block ${blockId} ${times} times`);
-    
+
     // Use the functional form of setBlocks to access current state
-    setBlocks(prevBlocks => {
-      const originalBlock = prevBlocks.find(block => block.id === blockId);
+    setBlocks((prevBlocks) => {
+      const originalBlock = prevBlocks.find((block) => block.id === blockId);
       if (!originalBlock) {
-        console.error(`Block ${blockId} not found in current blocks:`, prevBlocks.map(b => b.id));
+        console.error(
+          `Block ${blockId} not found in current blocks:`,
+          prevBlocks.map((b) => b.id)
+        );
         return prevBlocks; // Return unchanged state
       }
 
       const newBlocks: MusicBlock[] = [];
-      
+
       // Create the specified number of copies
       for (let i = 1; i <= times; i++) {
         const newBlock: MusicBlock = {
           ...originalBlock,
           id: `${originalBlock.id}-loop-${i}-${Date.now()}`,
           name: `${originalBlock.name} (Loop ${i})`,
-          startTime: originalBlock.startTime + (originalBlock.duration * i),
+          startTime: originalBlock.startTime + originalBlock.duration * i,
         };
         newBlocks.push(newBlock);
       }
 
       console.log(`✅ Created ${times} loops of block ${blockId}`);
-      
+
       // Return the updated state with new blocks added
       return [...prevBlocks, ...newBlocks];
     });
@@ -1276,12 +1310,13 @@ export default function BeatMaker() {
               console.log(
                 `🎵 Downloading chop ${index + 1} audio (ID: ${chop.track_id})`
               );
-              const response = await fetch(
+              const response = await authFetch(
                 `http://localhost:8000/tracks/${chop.track_id}/download`
               );
-
               if (response.ok) {
-                const audioBlob = await response.blob();
+                const { url: signedUrl } = await response.json();
+                const blobResp = await fetch(signedUrl);
+                const audioBlob = await blobResp.blob();
                 const audioFile = new File([audioBlob], chop.filename, {
                   type: audioBlob.type,
                 });

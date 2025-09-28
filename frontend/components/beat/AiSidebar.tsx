@@ -11,6 +11,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
+import { authFetch } from "@/lib/authFetch";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -475,19 +476,22 @@ export default function AiSidebar({
       console.log(`🍞 Starting chop operation for track ${trackId}`);
 
       // Call the backend chop endpoint
-      const response = await fetch(`http://localhost:8000/process/chop-audio`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          track_id: trackId,
-          default_length: defaultLength,
-          min_duration: minDuration,
-          n_clusters: nClusters,
-          max_chops: maxChops,
-        }),
-      });
+      const response = await authFetch(
+        `http://localhost:8000/process/chop-audio`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            track_id: trackId,
+            default_length: defaultLength,
+            min_duration: minDuration,
+            n_clusters: nClusters,
+            max_chops: maxChops,
+          }),
+        }
+      );
 
       if (!response.ok) {
         throw new Error(`Chop request failed: ${response.statusText}`);

@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 import httpx
 import librosa
 import soundfile as sf
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Request
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field, validator
@@ -17,6 +17,8 @@ from typing import Optional, List, Dict, Any
 
 from audio_processing import get_harmonic_components, get_percussive_components, add_reverb, adjust_pitch, adjust_speed
 from audio_storage import get_audio_storage
+from supabase_storage import SupabaseStorage
+from auth_helpers import get_user_id_from_token
 import json
 import numpy as np
 from sklearn.cluster import KMeans
@@ -123,6 +125,14 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
+# Supabase storage adapter (used for per-user storage)
+sb_storage = None
+try:
+    sb_storage = SupabaseStorage()
+    logger.info("SupabaseStorage initialized")
+except Exception as e:
+    logger.warning(f"SupabaseStorage not configured or failed to init: {e}")
 
 # Pydantic models for Base64 audio processing
 class AudioInput(BaseModel):
@@ -600,7 +610,7 @@ async def chop_audio_base64(input_data: ChopInput, request: Request):
 # Agent-Friendly Processing Endpoints (using Track IDs)
 
 @app.post("/process/extract-harmonics", response_model=TrackUploadResponse)
-async def extract_harmonics_by_id(request: TrackProcessingRequest):
+async def extract_harmonics_by_id(request: TrackProcessingRequest, authorization: str | None = Header(default=None)):
     """
     Extract harmonic components from a stored track using track ID.
     Returns a new track ID for the processed audio - perfect for AI agents.
@@ -612,16 +622,19 @@ async def extract_harmonics_by_id(request: TrackProcessingRequest):
         TrackUploadResponse with new track ID and metadata
     """
     try:
-        storage = get_audio_storage()
+        if not sb_storage:
+            raise HTTPException(status_code=500, detail="Supabase storage not configured")
+        user_id = await get_user_id_from_token(authorization)
+        logger.info(f"Beatoven poll for user {user_id}, task {task_id}")
         
         # Get original audio
-        audio_bytes = storage.get_audio_bytes(request.track_id)
+        audio_bytes = await sb_storage.download_track_bytes(user_id=user_id, track_id=request.track_id)
         if audio_bytes is None:
             raise HTTPException(status_code=404, detail=f"Track {request.track_id} not found")
         
         # Get original metadata
-        original_metadata = storage.get_track_metadata(request.track_id)
-        original_filename = original_metadata.get('filename', 'audio.wav') if original_metadata else 'audio.wav'
+        original_row = sb_storage.get_track(user_id=user_id, track_id=request.track_id)
+        original_filename = original_row.get('filename', 'audio.wav') if original_row else 'audio.wav'
         
         # Process audio
         temp_file_path = None
@@ -671,10 +684,26 @@ async def extract_harmonics_by_id(request: TrackProcessingRequest):
             new_filename = f"harmonic_{base_name}.wav"
             
             # Store processed audio
-            new_track_id = storage.store_audio(processed_bytes, new_filename, processed_metadata)
+            new_track_id = sb_storage.store_audio(
+                user_id=user_id,
+                audio_bytes=processed_bytes,
+                filename=new_filename,
+                metadata=processed_metadata,
+                source_track_id=request.track_id,
+            )
             
             # Get summary for response
-            track_summary = storage.get_track_summary(new_track_id)
+            new_row = sb_storage.get_track(user_id=user_id, track_id=new_track_id)
+            track_summary = {
+                'track_id': new_row['track_id'],
+                'filename': new_row['filename'],
+                'file_size': new_row['size_bytes'],
+                'created_at': new_row['created_at'],
+                'duration_seconds': new_row.get('duration_seconds'),
+                'sample_rate': new_row.get('sample_rate'),
+                'channels': new_row.get('channels'),
+                'processing_type': new_row.get('processing_type'),
+            }
             
             logger.info(f"Successfully processed harmonic extraction: {request.track_id} -> {new_track_id}")
             
@@ -696,7 +725,7 @@ async def extract_harmonics_by_id(request: TrackProcessingRequest):
 
 
 @app.post("/process/reverb", response_model=TrackUploadResponse)
-async def process_reverb_by_id(request: ReverbProcessingRequest):
+async def process_reverb_by_id(request: ReverbProcessingRequest, authorization: str | None = Header(default=None)):
     """
     Apply reverb effect to a stored track using track ID.
     Returns a new track ID for the processed audio - perfect for AI agents.
@@ -708,16 +737,18 @@ async def process_reverb_by_id(request: ReverbProcessingRequest):
         TrackUploadResponse with new track ID and metadata
     """
     try:
-        storage = get_audio_storage()
+        if not sb_storage:
+            raise HTTPException(status_code=500, detail="Supabase storage not configured")
+        user_id = await get_user_id_from_token(authorization)
         
         # Get original audio
-        audio_bytes = storage.get_audio_bytes(request.track_id)
+        audio_bytes = await sb_storage.download_track_bytes(user_id=user_id, track_id=request.track_id)
         if audio_bytes is None:
             raise HTTPException(status_code=404, detail=f"Track {request.track_id} not found")
         
         # Get original metadata
-        original_metadata = storage.get_track_metadata(request.track_id)
-        original_filename = original_metadata.get('filename', 'audio.wav') if original_metadata else 'audio.wav'
+        original_row = sb_storage.get_track(user_id=user_id, track_id=request.track_id)
+        original_filename = original_row.get('filename', 'audio.wav') if original_row else 'audio.wav'
         
         # Process audio
         temp_file_path = None
@@ -780,10 +811,26 @@ async def process_reverb_by_id(request: ReverbProcessingRequest):
             new_filename = f"reverb_{base_name}.wav"
             
             # Store processed audio
-            new_track_id = storage.store_audio(processed_bytes, new_filename, processed_metadata)
+            new_track_id = sb_storage.store_audio(
+                user_id=user_id,
+                audio_bytes=processed_bytes,
+                filename=new_filename,
+                metadata=processed_metadata,
+                source_track_id=request.track_id,
+            )
             
             # Get summary for response
-            track_summary = storage.get_track_summary(new_track_id)
+            new_row = sb_storage.get_track(user_id=user_id, track_id=new_track_id)
+            track_summary = {
+                'track_id': new_row['track_id'],
+                'filename': new_row['filename'],
+                'file_size': new_row['size_bytes'],
+                'created_at': new_row['created_at'],
+                'duration_seconds': new_row.get('duration_seconds'),
+                'sample_rate': new_row.get('sample_rate'),
+                'channels': new_row.get('channels'),
+                'processing_type': new_row.get('processing_type'),
+            }
             
             logger.info(f"Successfully processed reverb: {request.track_id} -> {new_track_id}")
             
@@ -805,7 +852,7 @@ async def process_reverb_by_id(request: ReverbProcessingRequest):
 
 
 @app.post("/process/chop-audio", response_model=ChopOutputWithIds)
-async def chop_audio_by_id(request: ChopProcessingRequest):
+async def chop_audio_by_id(request: ChopProcessingRequest, authorization: str | None = Header(default=None)):
     """
     Chop audio into segments using harmonic component analysis from a stored track.
     Returns track IDs for each chop - perfect for AI agents to minimize context usage.
@@ -817,17 +864,19 @@ async def chop_audio_by_id(request: ChopProcessingRequest):
         ChopOutputWithIds with track IDs for each chop and lightweight summaries
     """
     try:
-        storage = get_audio_storage()
+        if not sb_storage:
+            raise HTTPException(status_code=500, detail="Supabase storage not configured")
+        user_id = await get_user_id_from_token(authorization)
         
         # Get original audio
         logger.info(f"Getting audio bytes for track {request.track_id}")
-        audio_bytes = storage.get_audio_bytes(request.track_id)
+        audio_bytes = await sb_storage.download_track_bytes(user_id=user_id, track_id=request.track_id)
         if audio_bytes is None:
             raise HTTPException(status_code=404, detail=f"Track {request.track_id} not found")
         
         # Get original metadata
-        original_metadata = storage.get_track_metadata(request.track_id)
-        original_filename = original_metadata.get('filename', 'audio.wav') if original_metadata else 'audio.wav'
+        original_row = sb_storage.get_track(user_id=user_id, track_id=request.track_id)
+        original_filename = original_row.get('filename', 'audio.wav') if original_row else 'audio.wav'
         
         # Process audio
         temp_file_path = None
@@ -936,11 +985,27 @@ async def chop_audio_by_id(request: ChopProcessingRequest):
                 chop_filename = f"chop_{i:03d}_{base_name}.wav"
                 
                 # Store chop
-                chop_track_id = storage.store_audio(chop_bytes, chop_filename, chop_metadata)
+                chop_track_id = sb_storage.store_audio(
+                    user_id=user_id,
+                    audio_bytes=chop_bytes,
+                    filename=chop_filename,
+                    metadata=chop_metadata,
+                    source_track_id=request.track_id,
+                )
                 chop_track_ids.append(chop_track_id)
                 
                 # Get summary for response
-                chop_summary = storage.get_track_summary(chop_track_id)
+                chop_row = sb_storage.get_track(user_id=user_id, track_id=chop_track_id)
+                chop_summary = {
+                    'track_id': chop_row['track_id'],
+                    'filename': chop_row['filename'],
+                    'file_size': chop_row['size_bytes'],
+                    'created_at': chop_row['created_at'],
+                    'duration_seconds': chop_row.get('duration_seconds'),
+                    'sample_rate': chop_row.get('sample_rate'),
+                    'channels': chop_row.get('channels'),
+                    'processing_type': chop_row.get('processing_type'),
+                }
                 chop_summaries.append(TrackReference(**chop_summary))
                 
                 # Create feature vector for clustering
@@ -1063,7 +1128,7 @@ async def chop_audio_by_id(request: ChopProcessingRequest):
 
 
 @app.post("/process/speed", response_model=TrackUploadResponse)
-async def process_speed_by_id(request: SpeedProcessingRequest):
+async def process_speed_by_id(request: SpeedProcessingRequest, authorization: str | None = Header(default=None)):
     """
     Adjust the speed of a stored track using track ID.
     Returns a new track ID for the processed audio - perfect for AI agents.
@@ -1075,16 +1140,18 @@ async def process_speed_by_id(request: SpeedProcessingRequest):
         TrackUploadResponse with new track ID and metadata
     """
     try:
-        storage = get_audio_storage()
+        if not sb_storage:
+            raise HTTPException(status_code=500, detail="Supabase storage not configured")
+        user_id = await get_user_id_from_token(authorization)
         
         # Get original audio
-        audio_bytes = storage.get_audio_bytes(request.track_id)
+        audio_bytes = await sb_storage.download_track_bytes(user_id=user_id, track_id=request.track_id)
         if audio_bytes is None:
             raise HTTPException(status_code=404, detail=f"Track {request.track_id} not found")
         
         # Get original metadata
-        original_metadata = storage.get_track_metadata(request.track_id)
-        original_filename = original_metadata.get('filename', 'audio.wav') if original_metadata else 'audio.wav'
+        original_row = sb_storage.get_track(user_id=user_id, track_id=request.track_id)
+        original_filename = original_row.get('filename', 'audio.wav') if original_row else 'audio.wav'
         
         # Process audio
         temp_file_path = None
@@ -1140,10 +1207,26 @@ async def process_speed_by_id(request: SpeedProcessingRequest):
             new_filename = f"speed_{speed_description}_{base_name}.wav"
             
             # Store processed audio
-            new_track_id = storage.store_audio(processed_bytes, new_filename, processed_metadata)
+            new_track_id = sb_storage.store_audio(
+                user_id=user_id,
+                audio_bytes=processed_bytes,
+                filename=new_filename,
+                metadata=processed_metadata,
+                source_track_id=request.track_id,
+            )
             
             # Get summary for response
-            track_summary = storage.get_track_summary(new_track_id)
+            new_row = sb_storage.get_track(user_id=user_id, track_id=new_track_id)
+            track_summary = {
+                'track_id': new_row['track_id'],
+                'filename': new_row['filename'],
+                'file_size': new_row['size_bytes'],
+                'created_at': new_row['created_at'],
+                'duration_seconds': new_row.get('duration_seconds'),
+                'sample_rate': new_row.get('sample_rate'),
+                'channels': new_row.get('channels'),
+                'processing_type': new_row.get('processing_type'),
+            }
             
             logger.info(f"Successfully processed speed adjustment: {request.track_id} -> {new_track_id} (speed: {request.speed_factor}x)")
             
@@ -1165,7 +1248,7 @@ async def process_speed_by_id(request: SpeedProcessingRequest):
 
 
 @app.post("/start_track_generation")
-async def start_track_generation(request: TrackGenerationRequest):
+async def start_track_generation(request: TrackGenerationRequest, authorization: str | None = Header(default=None)):
     """
     Start track generation using Beatoven AI API.
     
@@ -1222,7 +1305,7 @@ class BeatovenTrackResponse(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
 
 @app.get("/get_generated_track", response_model=BeatovenTrackResponse)
-async def get_generated_track(task_id: str):
+async def get_generated_track(task_id: str, authorization: str | None = Header(default=None)):
     """
     Get the status for a generated track. If completed, downloads all tracks (main + stems)
     and stores them in the storage system, returning track IDs for frontend access.
@@ -1234,7 +1317,9 @@ async def get_generated_track(task_id: str):
         BeatovenTrackResponse with status and stored track references
     """
     try:
-        storage = get_audio_storage()
+        if not sb_storage:
+            raise HTTPException(status_code=500, detail="Supabase storage not configured")
+        user_id = await get_user_id_from_token(authorization)
 
         # Send request to Beatoven AI to check task status
         async with httpx.AsyncClient() as client:
@@ -1274,12 +1359,13 @@ async def get_generated_track(task_id: str):
                     'version': meta.get('version')
                 }
 
-                main_track_id = storage.store_audio(
-                    main_response.content,
-                    f"beatoven_track_{task_id}.mp3",
-                    main_track_metadata
+                main_track_id = sb_storage.store_audio(
+                    user_id=user_id,
+                    audio_bytes=main_response.content,
+                    filename=f"beatoven_track_{task_id}.mp3",
+                    metadata=main_track_metadata,
                 )
-                logger.info(f"Stored main track as {main_track_id}")
+                logger.info(f"Stored main track as {main_track_id} for user {user_id}")
 
                 # Download and store stems
                 stored_stems = {}
@@ -1298,13 +1384,14 @@ async def get_generated_track(task_id: str):
                             'main_track_id': main_track_id
                         }
 
-                        stem_track_id = storage.store_audio(
-                            stem_response.content,
-                            f"beatoven_{stem_type}_{task_id}.mp3",
-                            stem_metadata
+                        stem_track_id = sb_storage.store_audio(
+                            user_id=user_id,
+                            audio_bytes=stem_response.content,
+                            filename=f"beatoven_{stem_type}_{task_id}.mp3",
+                            metadata=stem_metadata,
                         )
                         stored_stems[stem_type] = stem_track_id
-                        logger.info(f"Stored {stem_type} stem as {stem_track_id}")
+                        logger.info(f"Stored {stem_type} stem as {stem_track_id} for user {user_id}")
 
                 response_metadata = {
                     'project_id': meta.get('project_id'),
@@ -1344,7 +1431,7 @@ async def get_generated_track(task_id: str):
 
 
 @app.post("/start_mubert_generation")
-async def start_mubert_generation(request: MubertGenerationRequest):
+async def start_mubert_generation(request: MubertGenerationRequest, authorization: str | None = Header(default=None)):
     """
     Start music track generation using the Mubert API.
     Returns a track ID to poll for completion status.
@@ -1408,7 +1495,7 @@ class MubertTrackResponse(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
 
 @app.get("/get_mubert_track", response_model=MubertTrackResponse)
-async def get_mubert_track(track_id: str):
+async def get_mubert_track(track_id: str, authorization: str | None = Header(default=None)):
     """
     Get the status for a Mubert generated track. If completed, downloads the track
     and stores it in the storage system, returning track ID for frontend access.
@@ -1420,7 +1507,9 @@ async def get_mubert_track(track_id: str):
         MubertTrackResponse with status and stored track reference
     """
     try:
-        storage = get_audio_storage()
+        if not sb_storage:
+            raise HTTPException(status_code=500, detail="Supabase storage not configured")
+        user_id = await get_user_id_from_token(authorization)
 
         # Send request to Mubert API to check track status
         async with httpx.AsyncClient() as client:
@@ -1471,10 +1560,11 @@ async def get_mubert_track(track_id: str):
                     'bitrate': generation.get('bitrate')
                 }
 
-                stored_track_id = storage.store_audio(
-                    track_response.content,
-                    f"mubert_track_{track_id}.{generation.get('format', 'mp3')}",
-                    track_metadata
+                stored_track_id = sb_storage.store_audio(
+                    user_id=user_id,
+                    audio_bytes=track_response.content,
+                    filename=f"mubert_track_{track_id}.{generation.get('format', 'mp3')}",
+                    metadata=track_metadata,
                 )
                 logger.info(f"Stored Mubert track as {stored_track_id}")
 
@@ -1516,7 +1606,7 @@ async def get_mubert_track(track_id: str):
 # Audio Storage and Management Endpoints
 
 @app.post("/upload-audio", response_model=TrackUploadResponse)
-async def upload_audio(file: UploadFile = File(...), request: Request = None):
+async def upload_audio(file: UploadFile = File(...), request: Request = None, authorization: str | None = Header(default=None)):
     """
     Upload and store an audio file, returning a track ID for future reference.
     This endpoint is designed to minimize context usage for AI agents.
@@ -1544,8 +1634,9 @@ async def upload_audio(file: UploadFile = File(...), request: Request = None):
         if len(audio_bytes) > 100 * 1024 * 1024:
             raise HTTPException(status_code=400, detail="File too large (max 100MB)")
         
-        # Get audio storage instance
-        storage = get_audio_storage()
+        if not sb_storage:
+            raise HTTPException(status_code=500, detail="Supabase storage not configured")
+        user_id = await get_user_id_from_token(authorization)
         
         # Try to extract basic metadata without full processing
         audio_metadata = {'processing_type': 'original_upload'}
@@ -1578,10 +1669,25 @@ async def upload_audio(file: UploadFile = File(...), request: Request = None):
                     os.unlink(temp_file_path)
         
         # Store audio
-        track_id = storage.store_audio(audio_bytes, file.filename, audio_metadata)
+        track_id = sb_storage.store_audio(
+            user_id=user_id,
+            audio_bytes=audio_bytes,
+            filename=file.filename,
+            metadata=audio_metadata,
+        )
         
         # Get track summary for response
-        track_summary = storage.get_track_summary(track_id)
+        row = sb_storage.get_track(user_id=user_id, track_id=track_id)
+        track_summary = {
+            'track_id': row['track_id'],
+            'filename': row['filename'],
+            'file_size': row['size_bytes'],
+            'created_at': row['created_at'],
+            'duration_seconds': row.get('duration_seconds'),
+            'sample_rate': row.get('sample_rate'),
+            'channels': row.get('channels'),
+            'processing_type': row.get('processing_type'),
+        }
         
         logger.info(f"Successfully uploaded audio as track {track_id}")
         
@@ -1599,7 +1705,7 @@ async def upload_audio(file: UploadFile = File(...), request: Request = None):
 
 
 @app.get("/tracks", response_model=List[TrackReference])
-async def list_tracks(limit: int = 100):
+async def list_tracks(limit: int = 100, authorization: str | None = Header(default=None)):
     """
     List all stored audio tracks with lightweight metadata.
     Perfect for AI agents to see available tracks without heavy context.
@@ -1611,10 +1717,23 @@ async def list_tracks(limit: int = 100):
         List of track references with metadata
     """
     try:
-        storage = get_audio_storage()
-        summaries = storage.list_tracks(limit=limit)
+        if not sb_storage:
+            raise HTTPException(status_code=500, detail="Supabase storage not configured")
+        user_id = await get_user_id_from_token(authorization)
+        rows = sb_storage.list_tracks(user_id=user_id, limit=limit)
         
-        return [TrackReference(**summary) for summary in summaries]
+        return [
+            TrackReference(
+                track_id=row['track_id'],
+                filename=row.get('filename'),
+                file_size=row.get('size_bytes'),
+                created_at=row.get('created_at'),
+                duration_seconds=row.get('duration_seconds'),
+                sample_rate=row.get('sample_rate'),
+                channels=row.get('channels'),
+                processing_type=row.get('processing_type'),
+            ) for row in rows
+        ]
         
     except Exception as e:
         logger.error(f"Error listing tracks: {str(e)}")
@@ -1622,7 +1741,7 @@ async def list_tracks(limit: int = 100):
 
 
 @app.get("/tracks/{track_id}", response_model=TrackReference)
-async def get_track_info(track_id: str):
+async def get_track_info(track_id: str, authorization: str | None = Header(default=None)):
     """
     Get metadata for a specific track.
     
@@ -1633,13 +1752,24 @@ async def get_track_info(track_id: str):
         Track metadata
     """
     try:
-        storage = get_audio_storage()
-        summary = storage.get_track_summary(track_id)
+        if not sb_storage:
+            raise HTTPException(status_code=500, detail="Supabase storage not configured")
+        user_id = await get_user_id_from_token(authorization)
+        row = sb_storage.get_track(user_id=user_id, track_id=track_id)
         
-        if summary is None:
+        if row is None:
             raise HTTPException(status_code=404, detail=f"Track {track_id} not found")
         
-        return TrackReference(**summary)
+        return TrackReference(
+            track_id=row['track_id'],
+            filename=row.get('filename'),
+            file_size=row.get('size_bytes'),
+            created_at=row.get('created_at'),
+            duration_seconds=row.get('duration_seconds'),
+            sample_rate=row.get('sample_rate'),
+            channels=row.get('channels'),
+            processing_type=row.get('processing_type'),
+        )
         
     except HTTPException:
         raise
@@ -1649,7 +1779,7 @@ async def get_track_info(track_id: str):
 
 
 @app.get("/tracks/{track_id}/download")
-async def download_track(track_id: str):
+async def download_track(track_id: str, authorization: str | None = Header(default=None)):
     """
     Download the actual audio file for a track.
     
@@ -1660,23 +1790,14 @@ async def download_track(track_id: str):
         Audio file as response
     """
     try:
-        storage = get_audio_storage()
-        audio_bytes = storage.get_audio_bytes(track_id)
-        
-        if audio_bytes is None:
+        if not sb_storage:
+            raise HTTPException(status_code=500, detail="Supabase storage not configured")
+        user_id = await get_user_id_from_token(authorization)
+        row = sb_storage.get_track(user_id=user_id, track_id=track_id)
+        if not row:
             raise HTTPException(status_code=404, detail=f"Track {track_id} not found")
-        
-        # Get metadata for filename
-        metadata = storage.get_track_metadata(track_id)
-        filename = metadata.get('filename', f'track_{track_id}.wav') if metadata else f'track_{track_id}.wav'
-        
-        return Response(
-            content=audio_bytes,
-            media_type="audio/wav",
-            headers={
-                "Content-Disposition": f"attachment; filename={filename}"
-            }
-        )
+        signed = sb_storage.get_signed_url(row['object_key'], 3600)
+        return {"url": signed, "filename": row.get('filename')}
         
     except HTTPException:
         raise
@@ -1686,7 +1807,7 @@ async def download_track(track_id: str):
 
 
 @app.delete("/tracks/{track_id}")
-async def delete_track(track_id: str):
+async def delete_track(track_id: str, authorization: str | None = Header(default=None)):
     """
     Delete a stored track.
     
@@ -1697,8 +1818,10 @@ async def delete_track(track_id: str):
         Success message
     """
     try:
-        storage = get_audio_storage()
-        success = storage.delete_track(track_id)
+        if not sb_storage:
+            raise HTTPException(status_code=500, detail="Supabase storage not configured")
+        user_id = await get_user_id_from_token(authorization)
+        success = sb_storage.delete_track(user_id=user_id, track_id=track_id)
         
         if not success:
             raise HTTPException(status_code=404, detail=f"Track {track_id} not found")
