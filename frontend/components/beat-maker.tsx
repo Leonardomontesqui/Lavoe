@@ -1047,7 +1047,7 @@ export default function BeatMaker() {
 
     try {
       // Call the backend speed adjustment endpoint
-      const response = await fetch(`http://localhost:8000/process/speed`, {
+      const response = await authFetch(`http://localhost:8000/process/speed`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
