@@ -625,6 +625,7 @@ async def extract_harmonics_by_id(request: TrackProcessingRequest, authorization
         if not sb_storage:
             raise HTTPException(status_code=500, detail="Supabase storage not configured")
         user_id = await get_user_id_from_token(authorization)
+        logger.info(f"Beatoven poll for user {user_id}, task {task_id}")
         
         # Get original audio
         audio_bytes = await sb_storage.download_track_bytes(user_id=user_id, track_id=request.track_id)
@@ -1247,7 +1248,7 @@ async def process_speed_by_id(request: SpeedProcessingRequest, authorization: st
 
 
 @app.post("/start_track_generation")
-async def start_track_generation(request: TrackGenerationRequest):
+async def start_track_generation(request: TrackGenerationRequest, authorization: str | None = Header(default=None)):
     """
     Start track generation using Beatoven AI API.
     
@@ -1304,7 +1305,7 @@ class BeatovenTrackResponse(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
 
 @app.get("/get_generated_track", response_model=BeatovenTrackResponse)
-async def get_generated_track(task_id: str):
+async def get_generated_track(task_id: str, authorization: str | None = Header(default=None)):
     """
     Get the status for a generated track. If completed, downloads all tracks (main + stems)
     and stores them in the storage system, returning track IDs for frontend access.
@@ -1316,7 +1317,9 @@ async def get_generated_track(task_id: str):
         BeatovenTrackResponse with status and stored track references
     """
     try:
-        storage = get_audio_storage()
+        if not sb_storage:
+            raise HTTPException(status_code=500, detail="Supabase storage not configured")
+        user_id = await get_user_id_from_token(authorization)
 
         # Send request to Beatoven AI to check task status
         async with httpx.AsyncClient() as client:
@@ -1356,12 +1359,13 @@ async def get_generated_track(task_id: str):
                     'version': meta.get('version')
                 }
 
-                main_track_id = storage.store_audio(
-                    main_response.content,
-                    f"beatoven_track_{task_id}.mp3",
-                    main_track_metadata
+                main_track_id = sb_storage.store_audio(
+                    user_id=user_id,
+                    audio_bytes=main_response.content,
+                    filename=f"beatoven_track_{task_id}.mp3",
+                    metadata=main_track_metadata,
                 )
-                logger.info(f"Stored main track as {main_track_id}")
+                logger.info(f"Stored main track as {main_track_id} for user {user_id}")
 
                 # Download and store stems
                 stored_stems = {}
@@ -1380,13 +1384,14 @@ async def get_generated_track(task_id: str):
                             'main_track_id': main_track_id
                         }
 
-                        stem_track_id = storage.store_audio(
-                            stem_response.content,
-                            f"beatoven_{stem_type}_{task_id}.mp3",
-                            stem_metadata
+                        stem_track_id = sb_storage.store_audio(
+                            user_id=user_id,
+                            audio_bytes=stem_response.content,
+                            filename=f"beatoven_{stem_type}_{task_id}.mp3",
+                            metadata=stem_metadata,
                         )
                         stored_stems[stem_type] = stem_track_id
-                        logger.info(f"Stored {stem_type} stem as {stem_track_id}")
+                        logger.info(f"Stored {stem_type} stem as {stem_track_id} for user {user_id}")
 
                 response_metadata = {
                     'project_id': meta.get('project_id'),
@@ -1426,7 +1431,7 @@ async def get_generated_track(task_id: str):
 
 
 @app.post("/start_mubert_generation")
-async def start_mubert_generation(request: MubertGenerationRequest):
+async def start_mubert_generation(request: MubertGenerationRequest, authorization: str | None = Header(default=None)):
     """
     Start music track generation using the Mubert API.
     Returns a track ID to poll for completion status.
@@ -1490,7 +1495,7 @@ class MubertTrackResponse(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
 
 @app.get("/get_mubert_track", response_model=MubertTrackResponse)
-async def get_mubert_track(track_id: str):
+async def get_mubert_track(track_id: str, authorization: str | None = Header(default=None)):
     """
     Get the status for a Mubert generated track. If completed, downloads the track
     and stores it in the storage system, returning track ID for frontend access.
@@ -1502,7 +1507,9 @@ async def get_mubert_track(track_id: str):
         MubertTrackResponse with status and stored track reference
     """
     try:
-        storage = get_audio_storage()
+        if not sb_storage:
+            raise HTTPException(status_code=500, detail="Supabase storage not configured")
+        user_id = await get_user_id_from_token(authorization)
 
         # Send request to Mubert API to check track status
         async with httpx.AsyncClient() as client:
@@ -1553,10 +1560,11 @@ async def get_mubert_track(track_id: str):
                     'bitrate': generation.get('bitrate')
                 }
 
-                stored_track_id = storage.store_audio(
-                    track_response.content,
-                    f"mubert_track_{track_id}.{generation.get('format', 'mp3')}",
-                    track_metadata
+                stored_track_id = sb_storage.store_audio(
+                    user_id=user_id,
+                    audio_bytes=track_response.content,
+                    filename=f"mubert_track_{track_id}.{generation.get('format', 'mp3')}",
+                    metadata=track_metadata,
                 )
                 logger.info(f"Stored Mubert track as {stored_track_id}")
 

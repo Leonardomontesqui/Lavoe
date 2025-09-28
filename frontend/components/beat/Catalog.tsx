@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Waveform } from "./Waveform";
+import { authFetch } from "@/lib/authFetch";
 
 interface Track {
   track_id: string;
@@ -47,11 +48,14 @@ function TrackWaveform({
     const load = async () => {
       try {
         setIsLoading(true);
-        const response = await fetch(
+        const response = await authFetch(
           `${API_BASE_URL}/tracks/${trackId}/download`
         );
-        if (!response.ok) throw new Error("Failed to fetch audio for waveform");
-        const blob = await response.blob();
+        if (!response.ok)
+          throw new Error("Failed to request signed URL for waveform");
+        const { url } = await response.json();
+        const blobResp = await fetch(url);
+        const blob = await blobResp.blob();
         if (!isCancelled) setAudioBlob(blob);
       } catch (e) {
         if (!isCancelled) {
@@ -100,7 +104,7 @@ export default function Catalog({
   const fetchTracks = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/tracks`);
+      const response = await authFetch(`${API_BASE_URL}/tracks`);
       if (!response.ok) {
         throw new Error(`Failed to fetch tracks: ${response.statusText}`);
       }
@@ -177,14 +181,15 @@ export default function Catalog({
     }
 
     try {
-      const response = await fetch(
+      const response = await authFetch(
         `${API_BASE_URL}/tracks/${trackId}/download`
       );
       if (!response.ok) {
         throw new Error("Failed to download track");
       }
-
-      const audioBlob = await response.blob();
+      const { url: signedUrl1 } = await response.json();
+      const blobResp = await fetch(signedUrl1);
+      const audioBlob = await blobResp.blob();
       const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
       currentAudio.current = audio;
@@ -222,14 +227,15 @@ export default function Catalog({
 
   const handleDownloadTrack = async (trackId: string, filename: string) => {
     try {
-      const response = await fetch(
+      const response = await authFetch(
         `${API_BASE_URL}/tracks/${trackId}/download`
       );
       if (!response.ok) {
         throw new Error("Failed to download track");
       }
-
-      const blob = await response.blob();
+      const { url: signedUrl2 } = await response.json();
+      const blobResp = await fetch(signedUrl2);
+      const blob = await blobResp.blob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -248,7 +254,7 @@ export default function Catalog({
 
   const handleDeleteTrack = async (trackId: string) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/tracks/${trackId}`, {
+      const response = await authFetch(`${API_BASE_URL}/tracks/${trackId}`, {
         method: "DELETE",
       });
       if (!response.ok) {

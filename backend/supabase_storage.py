@@ -48,11 +48,15 @@ class SupabaseStorage:
         content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
 
         # Upload bytes to Storage (private bucket)
-        self._client.storage.from_(self._bucket).upload(
+        try:
+            self._client.storage.from_(self._bucket).upload(
             path=object_key,
             file=audio_bytes,
             file_options={"content-type": content_type, "upsert": False},
-        )
+            )
+        except Exception as e:
+            # Surface helpful errors for debugging (e.g., missing bucket or perms)
+            raise RuntimeError(f"Supabase Storage upload failed for {object_key}: {e}")
 
         size_bytes = len(audio_bytes)
 
@@ -72,7 +76,15 @@ class SupabaseStorage:
             "channels": metadata.get("channels"),
             "metadata": metadata,
         }
-        self._client.table("tracks").insert(row).execute()
+        try:
+            self._client.table("tracks").insert(row).execute()
+        except Exception as e:
+            # Try to clean up uploaded object on DB failure
+            try:
+                self._client.storage.from_(self._bucket).remove([object_key])
+            except Exception:
+                pass
+            raise RuntimeError(f"Supabase DB insert failed for track {track_id}: {e}")
         return track_id
 
     def get_track(self, *, user_id: str, track_id: str) -> Optional[Dict[str, Any]]:
