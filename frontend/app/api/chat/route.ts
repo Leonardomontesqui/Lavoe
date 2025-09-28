@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { NextRequest } from 'next/server';
 
 // Backend API base URL - adjust this to match your backend server
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
 
 // Tool definitions that map to your Python backend endpoints
 const extractHarmonics = tool({
