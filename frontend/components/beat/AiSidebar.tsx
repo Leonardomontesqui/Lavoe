@@ -293,6 +293,7 @@ export default function AiSidebar({
   const [aiModel, setAiModel] = useState<
     "gpt-4o-mini" | "gemini-2.5-flash" | "command-a-03-2025"
   >("gpt-4o-mini");
+  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
   const placeholder =
     mode === "beat" ? "Describe a beat..." : "Ask the agent...";
 
@@ -477,7 +478,7 @@ export default function AiSidebar({
 
       // Call the backend chop endpoint
       const response = await authFetch(
-        `http://localhost:8000/process/chop-audio`,
+        `${BACKEND_URL}/process/chop-audio`,
         {
           method: "POST",
           headers: {
