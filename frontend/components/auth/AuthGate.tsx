@@ -43,11 +43,16 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const signInWithMagicLink = async () => {
-    const email = prompt("Enter your email to sign in");
-    if (!email) return;
-    await supabase.auth.signInWithOtp({ email });
-    alert("Welcome to Lavoe");
+  const signInWithGoogle = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo:
+          typeof window !== "undefined" ? window.location.origin : undefined,
+        // Uncomment if you need Google refresh tokens for later Google API access:
+        // queryParams: { access_type: 'offline', prompt: 'consent' },
+      },
+    });
   };
 
   if (loading) return children as JSX.Element;
@@ -70,7 +75,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
             </DialogDescription>
           </DialogHeader>
           <div className="flex gap-2 justify-end">
-            <Button onClick={signInWithMagicLink}>Sign in with email</Button>
+            <Button onClick={signInWithGoogle}>Sign in with Google</Button>
           </div>
         </DialogContent>
       </Dialog>
