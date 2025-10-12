@@ -10,10 +10,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { OnboardingFlow } from "./OnboardingFlow";
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -22,12 +24,14 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         const { data, error } = await supabase.auth.getSession();
         if (!mounted) return;
         if (error) {
-          setOpen(true);
+          setShowOnboarding(true);
         } else {
-          setOpen(!data.session);
+          if (!data.session) {
+            setShowOnboarding(true);
+          }
         }
       } catch (_e) {
-        if (mounted) setOpen(true);
+        if (mounted) setShowOnboarding(true);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -35,7 +39,12 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     init();
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setOpen(!session);
+      if (session) {
+        setShowOnboarding(false);
+        setOpen(false);
+      } else {
+        setShowOnboarding(true);
+      }
     });
     return () => {
       mounted = false;
@@ -55,11 +64,21 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     });
   };
 
+  const handleOnboardingComplete = () => {
+    setShowOnboarding(false);
+    setOpen(true);
+  };
+
   if (loading) return children as JSX.Element;
 
   return (
     <>
       {children}
+      <OnboardingFlow
+        open={showOnboarding}
+        onComplete={handleOnboardingComplete}
+        onSignIn={signInWithGoogle}
+      />
       <Dialog open={open}>
         <DialogContent
           showCloseButton={false}
