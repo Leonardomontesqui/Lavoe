@@ -77,13 +77,15 @@ export function OnboardingFlow({
         onEscapeKeyDown={(e) => e.preventDefault()}
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
-        className="max-w-2xl px-12 bg-[#141414] border-[#1a1a1a]"
+        className="!w-[50vw] !max-w-4xl px-12 bg-[#141414] border-[#1a1a1a]"
       >
-        <DialogHeader className="text-center space-y-6">
+        <DialogHeader className="text-center space-y-3">
           {currentStep === 0 ? (
-            <DialogTitle className="text-4xl text-foreground font-normal flex items-center justify-center">
-              <span>Welcome to </span>
-              <span className={ppEditorialNew.className}>Lavoe</span>
+            <DialogTitle className="text-foreground font-normal flex items-center justify-center gap-2">
+              <span className="text-4xl">Welcome to</span>
+              <span className={`${ppEditorialNew.className} text-5xl`}>
+                Lavoe
+              </span>
             </DialogTitle>
           ) : (
             <DialogTitle
@@ -93,7 +95,7 @@ export function OnboardingFlow({
             </DialogTitle>
           )}
           {currentStepData.subtitle && (
-            <DialogDescription className="text-xl text-foreground font-medium">
+            <DialogDescription className="text-base text-gray-400 font-normal text-center">
               {currentStepData.subtitle}
             </DialogDescription>
           )}
@@ -105,7 +107,7 @@ export function OnboardingFlow({
         </DialogHeader>
 
         {/* Video Placeholder */}
-        <div className="w-full bg-muted rounded-lg aspect-video border border-border flex items-center justify-center shadow-sm">
+        <div className="w-full bg-muted rounded-lg border border-border flex items-center justify-center shadow-sm h-96">
           <div className="text-muted-foreground text-sm opacity-60">
             Video placeholder
           </div>
