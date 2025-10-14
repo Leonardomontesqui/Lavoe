@@ -26,20 +26,20 @@ const onboardingSteps = [
       "Generate any beat with AI - Create professional-quality beats instantly with our advanced AI technology. From hip-hop to electronic, bring your musical vision to life.",
   },
   {
-    title: "Lavoe",
-    subtitle: "Agentic audio editing",
+    title: "Agentic audio editing",
+    subtitle: "",
     description:
       "Let AI intelligently edit your tracks. Our agent understands music structure and can make smart edits, cuts, and arrangements automatically.",
   },
   {
-    title: "Lavoe",
-    subtitle: "Agentic beat manipulation",
+    title: "Agentic beat manipulation",
+    subtitle: "",
     description:
       "Transform your beats with AI-powered controls. Change tempo, add effects, and manipulate rhythms with intelligent automation.",
   },
   {
-    title: "Lavoe",
-    subtitle: "Standard DAW capabilities",
+    title: "Standard DAW capabilities",
+    subtitle: "",
     description:
       "Full digital audio workstation features. Record, edit, mix, and master your music with professional tools and intuitive interface.",
   },
@@ -77,7 +77,7 @@ export function OnboardingFlow({
         onEscapeKeyDown={(e) => e.preventDefault()}
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
-        className="max-w-2xl px-12"
+        className="max-w-2xl px-12 bg-[#141414] border-[#1a1a1a]"
       >
         <DialogHeader className="text-center space-y-6">
           {currentStep === 0 ? (
@@ -87,14 +87,16 @@ export function OnboardingFlow({
             </DialogTitle>
           ) : (
             <DialogTitle
-              className={`${ppEditorialNew.className} text-4xl text-foreground font-normal`}
+              className={`${ppEditorialNew.className} text-4xl text-foreground font-normal text-center`}
             >
               {currentStepData.title}
             </DialogTitle>
           )}
-          <DialogDescription className="text-xl text-foreground font-medium">
-            {currentStepData.subtitle}
-          </DialogDescription>
+          {currentStepData.subtitle && (
+            <DialogDescription className="text-xl text-foreground font-medium">
+              {currentStepData.subtitle}
+            </DialogDescription>
+          )}
           {currentStep !== 0 && (
             <p className="text-muted-foreground text-sm leading-relaxed max-w-md mx-auto">
               {currentStepData.description}
