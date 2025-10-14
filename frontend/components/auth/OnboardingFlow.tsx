@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { ppEditorialNew } from "@/lib/fonts";
 
 interface OnboardingFlowProps {
   open: boolean;
@@ -18,10 +19,11 @@ interface OnboardingFlowProps {
 
 const onboardingSteps = [
   {
-    title: "Lavoe",
-    subtitle: "Generate any beat with AI",
+    title: "Welcome to Lavoe",
+    titleClassName: "flex items-center justify-center gap-2",
+    subtitle: "Everyone should make music",
     description:
-      "Create professional-quality beats instantly with our advanced AI technology. From hip-hop to electronic, bring your musical vision to life.",
+      "Generate any beat with AI - Create professional-quality beats instantly with our advanced AI technology. From hip-hop to electronic, bring your musical vision to life.",
   },
   {
     title: "Lavoe",
@@ -75,18 +77,29 @@ export function OnboardingFlow({
         onEscapeKeyDown={(e) => e.preventDefault()}
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
-        className="max-w-2xl"
+        className="max-w-2xl px-12"
       >
         <DialogHeader className="text-center space-y-6">
-          <DialogTitle className="font-pp-editorial text-4xl text-foreground font-normal">
-            {currentStepData.title}
-          </DialogTitle>
+          {currentStep === 0 ? (
+            <DialogTitle className="text-4xl text-foreground font-normal flex items-center justify-center">
+              <span>Welcome to </span>
+              <span className={ppEditorialNew.className}>Lavoe</span>
+            </DialogTitle>
+          ) : (
+            <DialogTitle
+              className={`${ppEditorialNew.className} text-4xl text-foreground font-normal`}
+            >
+              {currentStepData.title}
+            </DialogTitle>
+          )}
           <DialogDescription className="text-xl text-foreground font-medium">
             {currentStepData.subtitle}
           </DialogDescription>
-          <p className="text-muted-foreground text-sm leading-relaxed max-w-md mx-auto">
-            {currentStepData.description}
-          </p>
+          {currentStep !== 0 && (
+            <p className="text-muted-foreground text-sm leading-relaxed max-w-md mx-auto">
+              {currentStepData.description}
+            </p>
+          )}
         </DialogHeader>
 
         {/* Video Placeholder */}
@@ -102,11 +115,14 @@ export function OnboardingFlow({
             variant="outline"
             onClick={handleBack}
             disabled={isFirstStep}
-            className="min-w-[100px]"
+            className="min-w-[100px] bg-background border-border text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             Back
           </Button>
-          <Button onClick={handleNext} className="min-w-[100px]">
+          <Button
+            onClick={handleNext}
+            className="min-w-[100px] bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border"
+          >
             {isLastStep ? "Sign in with Google" : "Next"}
           </Button>
         </div>
