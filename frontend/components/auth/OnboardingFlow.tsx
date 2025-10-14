@@ -82,7 +82,7 @@ export function OnboardingFlow({
             </DialogTitle>
           ) : (
             <DialogTitle
-              className={`${ppEditorialNew.className} text-4xl text-foreground font-normal text-center`}
+              className={`${ppEditorialNew.className} text-5xl text-foreground font-normal text-center`}
             >
               {currentStepData.title}
             </DialogTitle>
