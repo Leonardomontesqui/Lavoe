@@ -22,26 +22,19 @@ const onboardingSteps = [
     title: "Welcome to Lavoe",
     titleClassName: "flex items-center justify-center gap-2",
     subtitle: "Everyone should make music",
-    description:
-      "Generate any beat with AI - Create professional-quality beats instantly with our advanced AI technology. From hip-hop to electronic, bring your musical vision to life.",
+  },
+  {
+    title: "Generate beats with AI",
+    subtitle: "Rock, reggaeton, jazz, imagination is the limit",
   },
   {
     title: "Agentic audio editing",
-    subtitle: "",
-    description:
-      "Let AI intelligently edit your tracks. Our agent understands music structure and can make smart edits, cuts, and arrangements automatically.",
-  },
-  {
-    title: "Agentic beat manipulation",
-    subtitle: "",
-    description:
-      "Transform your beats with AI-powered controls. Change tempo, add effects, and manipulate rhythms with intelligent automation.",
+    subtitle: "Chop up the beats, change their speed, and duplicate",
   },
   {
     title: "Standard DAW capabilities",
-    subtitle: "",
-    description:
-      "Full digital audio workstation features. Record, edit, mix, and master your music with professional tools and intuitive interface.",
+    subtitle:
+      "Import existing beats, record yourself, and the rest of standard DAW functions",
   },
 ];
 
@@ -98,11 +91,6 @@ export function OnboardingFlow({
             <DialogDescription className="text-base text-gray-400 font-normal text-center">
               {currentStepData.subtitle}
             </DialogDescription>
-          )}
-          {currentStep !== 0 && (
-            <p className="text-muted-foreground text-sm leading-relaxed max-w-md mx-auto">
-              {currentStepData.description}
-            </p>
           )}
         </DialogHeader>
 
