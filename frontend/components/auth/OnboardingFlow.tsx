@@ -70,7 +70,7 @@ export function OnboardingFlow({
         onEscapeKeyDown={(e) => e.preventDefault()}
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
-        className="!w-[50vw] !max-w-4xl px-12 bg-[#151515] border-[#1a1a1a]"
+        className="!w-[50vw] !max-w-4xl h-[650px] px-12 bg-[#151515] border-[#1a1a1a]"
       >
         <DialogHeader className="text-center space-y-3">
           {currentStep === 0 ? (
