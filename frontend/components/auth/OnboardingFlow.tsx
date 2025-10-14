@@ -70,7 +70,7 @@ export function OnboardingFlow({
         onEscapeKeyDown={(e) => e.preventDefault()}
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
-        className="!w-[50vw] !max-w-4xl px-12 bg-[#141414] border-[#1a1a1a]"
+        className="!w-[50vw] !max-w-4xl px-12 bg-[#151515] border-[#1a1a1a]"
       >
         <DialogHeader className="text-center space-y-3">
           {currentStep === 0 ? (
@@ -107,13 +107,13 @@ export function OnboardingFlow({
             variant="outline"
             onClick={handleBack}
             disabled={isFirstStep}
-            className="min-w-[100px] bg-background border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="min-w-[100px] bg-[#141414] border-border text-muted-foreground hover:bg-[#141414] hover:text-muted-foreground"
           >
             Back
           </Button>
           <Button
             onClick={handleNext}
-            className="min-w-[100px] bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border"
+            className="min-w-[100px] bg-[#141414] text-foreground border border-border hover:bg-[#141414]"
           >
             {isLastStep ? "Sign in with Google" : "Next"}
           </Button>
