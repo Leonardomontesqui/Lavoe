@@ -107,15 +107,19 @@ export function OnboardingFlow({
             variant="outline"
             onClick={handleBack}
             disabled={isFirstStep}
-            className="min-w-[100px] bg-[#141414] border-border text-muted-foreground hover:bg-[#141414] hover:text-muted-foreground"
+            className="min-w-[100px] bg-[#141414] border-border text-muted-foreground hover:bg-[#1a1a1a] hover:text-foreground transition-all"
           >
             Back
           </Button>
           <Button
             onClick={handleNext}
-            className="min-w-[100px] bg-[#141414] text-foreground border border-border hover:bg-[#141414]"
+            className={
+              isLastStep
+                ? "min-w-[100px] bg-gradient-to-r from-pink-500 via-rose-500 to-orange-500 text-white border-0 hover:opacity-80 transition-all"
+                : "min-w-[100px] bg-[#141414] text-foreground border border-border hover:bg-[#1a1a1a] transition-all"
+            }
           >
-            {isLastStep ? "Sign in with Google" : "Next"}
+            {isLastStep ? "Sign in" : "Next"}
           </Button>
         </div>
       </DialogContent>
