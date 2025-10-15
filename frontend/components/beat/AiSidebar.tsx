@@ -291,8 +291,8 @@ export default function AiSidebar({
     "beatoven"
   );
   const [aiModel, setAiModel] = useState<
-    "gpt-4o-mini" | "gemini-2.5-flash" | "command-a-03-2025"
-  >("command-a-03-2025");
+    "gpt-4o-mini" | "gemini-2.5-flash" | "command-A-03"
+  >("command-A-03");
   const BACKEND_URL =
     process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
   const placeholder =
@@ -1102,7 +1102,7 @@ export default function AiSidebar({
                           className="bg-[#2F2F2F] border-[#484848]"
                         >
                           <DropdownMenuItem
-                            onClick={() => setAiModel("command-a-03-2025")}
+                            onClick={() => setAiModel("command-A-03")}
                           >
                             <span>command-a-03-2025</span>
                           </DropdownMenuItem>

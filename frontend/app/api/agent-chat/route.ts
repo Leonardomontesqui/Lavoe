@@ -1,84 +1,137 @@
-import { openai } from '@ai-sdk/openai';
-import { google } from '@ai-sdk/google';
-import { cohere } from '@ai-sdk/cohere';
-import { streamText, tool, convertToModelMessages, UIMessage } from 'ai';
-import { z } from 'zod';
-import { NextRequest } from 'next/server';
+import { openai } from "@ai-sdk/openai";
+import { google } from "@ai-sdk/google";
+import { cohere } from "@ai-sdk/cohere";
+import { streamText, tool, convertToModelMessages, UIMessage } from "ai";
+import { z } from "zod";
+import { NextRequest } from "next/server";
 
 // Tool for moving blocks in the music editor (client-side only)
 const moveBlock = tool({
-  description: 'Move a music block to a new start time in the timeline. Useful for rearranging the composition.',
+  description:
+    "Move a music block to a new start time in the timeline. Useful for rearranging the composition.",
   inputSchema: z.object({
-    blockId: z.string().describe('The ID of the block to move'),
-    newStartTime: z.number().min(0).describe('The new start time position in measures (0-based)'),
+    blockId: z.string().describe("The ID of the block to move"),
+    newStartTime: z
+      .number()
+      .min(0)
+      .describe("The new start time position in measures (0-based)"),
   }),
   // No execute function - this is handled client-side
 });
 
 // Tool for chopping audio tracks (client-side only)
 const chopAudio = tool({
-  description: 'Chop an audio track into segments based on onset detection. Creates multiple new blocks from the original track. Very useful for creating drum loops or breaking down complex audio. Automatically picks representative chops from each cluster.',
+  description:
+    "Chop an audio track into segments based on onset detection. Creates multiple new blocks from the original track. Very useful for creating drum loops or breaking down complex audio. Automatically picks representative chops from each cluster.",
   inputSchema: z.object({
-    trackId: z.string().describe('The ID of the track to chop'),
-    defaultLength: z.number().min(0.1).max(10).default(1.8).describe('Default length for chops in seconds (default: 1.8)'),
-    minDuration: z.number().min(0.05).max(2).default(0.2).describe('Minimum duration for chops in seconds (default: 0.2)'),
-    nClusters: z.number().min(1).max(20).default(3).describe('Number of clusters for grouping similar chops (default: 3)'),
-    maxChops: z.number().min(1).max(50).default(6).describe('Maximum number of chops to return, picks best representatives from each cluster (default: 6)'),
+    trackId: z.string().describe("The ID of the track to chop"),
+    defaultLength: z
+      .number()
+      .min(0.1)
+      .max(10)
+      .default(1.8)
+      .describe("Default length for chops in seconds (default: 1.8)"),
+    minDuration: z
+      .number()
+      .min(0.05)
+      .max(2)
+      .default(0.2)
+      .describe("Minimum duration for chops in seconds (default: 0.2)"),
+    nClusters: z
+      .number()
+      .min(1)
+      .max(20)
+      .default(3)
+      .describe("Number of clusters for grouping similar chops (default: 3)"),
+    maxChops: z
+      .number()
+      .min(1)
+      .max(50)
+      .default(6)
+      .describe(
+        "Maximum number of chops to return, picks best representatives from each cluster (default: 6)"
+      ),
   }),
   // No execute function - this is handled client-side
 });
 
 // Tool for adjusting audio speed (client-side only)
 const adjustSpeed = tool({
-  description: 'Adjust the speed of an audio block. Makes the audio faster or slower while maintaining pitch. Creates a new track with the adjusted speed and updates the block in place.',
+  description:
+    "Adjust the speed of an audio block. Makes the audio faster or slower while maintaining pitch. Creates a new track with the adjusted speed and updates the block in place.",
   inputSchema: z.object({
-    blockId: z.string().describe('The ID of the block to speed up or slow down'),
-    speedFactor: z.number().min(0.1).max(10).describe('Speed multiplication factor (1.0 = normal, 2.0 = 2x faster, 0.5 = 2x slower)'),
+    blockId: z
+      .string()
+      .describe("The ID of the block to speed up or slow down"),
+    speedFactor: z
+      .number()
+      .min(0.1)
+      .max(10)
+      .describe(
+        "Speed multiplication factor (1.0 = normal, 2.0 = 2x faster, 0.5 = 2x slower)"
+      ),
   }),
   // No execute function - this is handled client-side
 });
 
 // Tool for looping/duplicating blocks (client-side only)
 const loop = tool({
-  description: 'Loop/duplicate a music block multiple times, placing each copy right after the previous one on the timeline. Useful for creating repetitive patterns or extending musical phrases.',
+  description:
+    "Loop/duplicate a music block multiple times, placing each copy right after the previous one on the timeline. Useful for creating repetitive patterns or extending musical phrases.",
   inputSchema: z.object({
-    blockId: z.string().describe('The ID of the block to loop'),
-    times: z.number().min(1).max(10).describe('Number of times to loop the block (1-10)'),
+    blockId: z.string().describe("The ID of the block to loop"),
+    times: z
+      .number()
+      .min(1)
+      .max(10)
+      .describe("Number of times to loop the block (1-10)"),
   }),
   // No execute function - this is handled client-side
 });
 
 export async function POST(req: NextRequest) {
-  console.log("POST request received")
+  console.log("POST request received");
   try {
     const body = await req.json();
     console.log("Request body:", JSON.stringify(body, null, 2));
 
-    const { messages, blocks, model = 'gpt-4o-mini' } = body;
+    const { messages, blocks, model = "gpt-4o-mini" } = body;
 
     if (!messages || !Array.isArray(messages)) {
       console.error("Invalid messages:", messages);
-      return new Response('Invalid messages format', { status: 400 });
+      return new Response("Invalid messages format", { status: 400 });
     }
 
     // Include current blocks state in the system prompt so the AI knows what's available
-    const blocksContext = blocks && blocks.length > 0 ? `
+    const blocksContext =
+      blocks && blocks.length > 0
+        ? `
 Current blocks in the timeline:
-${blocks.map((block: any) => `- Block "${block.name}" (ID: ${block.id}) at time ${block.startTime} measures, duration ${block.duration} measures, track index ${block.track}${block.trackId ? `, track ID: ${block.trackId}` : ''}`).join('\n')}
-` : 'No blocks currently in the timeline.';
+${blocks
+  .map(
+    (block: any) =>
+      `- Block "${block.name}" (ID: ${block.id}) at time ${
+        block.startTime
+      } measures, duration ${block.duration} measures, track index ${
+        block.track
+      }${block.trackId ? `, track ID: ${block.trackId}` : ""}`
+  )
+  .join("\n")}
+`
+        : "No blocks currently in the timeline.";
 
     // Select the appropriate model provider based on the requested model
     let selectedModel;
     switch (model) {
-      case 'gemini-2.5-flash':
-        selectedModel = google('gemini-2.5-flash');
+      case "gemini-2.5-flash":
+        selectedModel = google("gemini-2.5-flash");
         break;
-      case 'command-a-03-2025':
-        selectedModel = cohere('command-a-03-2025');
+      case "command-A-03":
+        selectedModel = cohere("command-a-03-2025");
         break;
-      case 'gpt-4o-mini':
+      case "gpt-4o-mini":
       default:
-        selectedModel = openai('gpt-4o-mini');
+        selectedModel = openai("gpt-4o-mini");
         break;
     }
 
@@ -138,15 +191,15 @@ Be creative with arrangements and provide musical insight along with the technic
 
     return result.toUIMessageStreamResponse();
   } catch (error) {
-    console.error('Agent Chat API error:', error);
+    console.error("Agent Chat API error:", error);
     return new Response(
       JSON.stringify({
-        error: 'Internal server error',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        error: "Internal server error",
+        message: error instanceof Error ? error.message : "Unknown error",
       }),
       {
         status: 500,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { "Content-Type": "application/json" },
       }
     );
   }
