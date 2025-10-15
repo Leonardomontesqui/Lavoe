@@ -292,8 +292,9 @@ export default function AiSidebar({
   );
   const [aiModel, setAiModel] = useState<
     "gpt-4o-mini" | "gemini-2.5-flash" | "command-a-03-2025"
-  >("gpt-4o-mini");
-  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+  >("command-a-03-2025");
+  const BACKEND_URL =
+    process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
   const placeholder =
     mode === "beat" ? "Describe a beat..." : "Ask the agent...";
 
@@ -477,22 +478,19 @@ export default function AiSidebar({
       console.log(`🍞 Starting chop operation for track ${trackId}`);
 
       // Call the backend chop endpoint
-      const response = await authFetch(
-        `${BACKEND_URL}/process/chop-audio`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            track_id: trackId,
-            default_length: defaultLength,
-            min_duration: minDuration,
-            n_clusters: nClusters,
-            max_chops: maxChops,
-          }),
-        }
-      );
+      const response = await authFetch(`${BACKEND_URL}/process/chop-audio`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          track_id: trackId,
+          default_length: defaultLength,
+          min_duration: minDuration,
+          n_clusters: nClusters,
+          max_chops: maxChops,
+        }),
+      });
 
       if (!response.ok) {
         throw new Error(`Chop request failed: ${response.statusText}`);
@@ -1078,7 +1076,8 @@ export default function AiSidebar({
                             <span>Beatoven</span>
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            onClick={() => setMusicProvider("mubert")}
+                            disabled
+                            className="opacity-50 cursor-not-allowed"
                           >
                             <span>Mubert</span>
                           </DropdownMenuItem>
@@ -1103,19 +1102,21 @@ export default function AiSidebar({
                           className="bg-[#2F2F2F] border-[#484848]"
                         >
                           <DropdownMenuItem
-                            onClick={() => setAiModel("gpt-4o-mini")}
+                            onClick={() => setAiModel("command-a-03-2025")}
+                          >
+                            <span>command-a-03-2025</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            disabled
+                            className="opacity-50 cursor-not-allowed"
                           >
                             <span>gpt-4o-mini</span>
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            onClick={() => setAiModel("gemini-2.5-flash")}
+                            disabled
+                            className="opacity-50 cursor-not-allowed"
                           >
                             <span>gemini-2.5-flash</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => setAiModel("command-a-03-2025")}
-                          >
-                            <span>command-a-03-2025</span>
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
