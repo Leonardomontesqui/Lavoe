@@ -10,6 +10,28 @@ export const metadata: Metadata = {
   title: "Lavoe",
   description: "AI for music production",
   generator: "Lavoe",
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"
+  ),
+  openGraph: {
+    title: "Lavoe",
+    description: "AI for music production",
+    images: [
+      {
+        url: "/preview.png",
+        width: 1200,
+        height: 630,
+        alt: "Lavoe - Cursor for music production",
+      },
+    ],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Lavoe",
+    description: "Cursor for music production",
+    images: ["/preview.png"],
+  },
 };
 
 export default function RootLayout({
