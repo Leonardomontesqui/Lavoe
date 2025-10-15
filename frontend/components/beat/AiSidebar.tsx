@@ -1158,7 +1158,13 @@ export default function AiSidebar({
                     type="submit"
                     variant="ghost"
                     size="sm"
-                    className="h-8 w-8 p-0 text-gray-400 hover:text-white"
+                    className={`h-8 w-8 p-0 rounded-md transition-all ${
+                      (mode === "agent" && (!agentInput.trim() || isLoading)) ||
+                      (mode === "beat" &&
+                        (!aiPrompt.trim() || isGeneratingTrack))
+                        ? "text-gray-400 hover:text-white"
+                        : "bg-gradient-to-r from-pink-500 via-rose-500 to-orange-500 text-white hover:opacity-80"
+                    }`}
                     disabled={
                       (mode === "agent" && (!agentInput.trim() || isLoading)) ||
                       (mode === "beat" &&
