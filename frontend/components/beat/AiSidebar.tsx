@@ -990,6 +990,37 @@ export default function AiSidebar({
                 <MusicLoadingState className="py-4" />
               </div>
             )}
+
+            {/* Show default state when in agent mode with no messages */}
+            {mode === "agent" && messages.length === 0 && (
+              <div className="bg-white/5 rounded-lg p-4">
+                <h3 className="text-white/80 font-medium text-sm mb-3">
+                  Toolbox
+                </h3>
+                <ul className="space-y-2 text-[#B7BCC5]/80 text-sm">
+                  <li className="flex items-start">
+                    <span className="mr-2">•</span>
+                    <span>Move blocks on the timeline</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mr-2">•</span>
+                    <span>Chop tracks into rhythmic segments</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mr-2">•</span>
+                    <span>Adjust playback speed of blocks</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mr-2">•</span>
+                    <span>Loop blocks multiple times</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mr-2">•</span>
+                    <span>Ask questions about your music arrangement</span>
+                  </li>
+                </ul>
+              </div>
+            )}
           </div>
 
           <div className="p-4">
