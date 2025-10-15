@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ppEditorialNew } from "@/lib/fonts";
+import { Play, Pause } from "lucide-react";
 
 interface OnboardingFlowProps {
   open: boolean;
@@ -45,6 +46,7 @@ export function OnboardingFlow({
 }: OnboardingFlowProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [hasAudio, setHasAudio] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
   const isLastStep = currentStep === onboardingSteps.length - 1;
   const isFirstStep = currentStep === 0;
@@ -55,6 +57,7 @@ export function OnboardingFlow({
     } else {
       setCurrentStep(currentStep + 1);
       setHasAudio(false);
+      setIsPlaying(true);
     }
   };
 
@@ -62,13 +65,27 @@ export function OnboardingFlow({
     if (!isFirstStep) {
       setCurrentStep(currentStep - 1);
       setHasAudio(false);
+      setIsPlaying(true);
+    }
+  };
+
+  const handleAudioClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (videoRef.current && !hasAudio) {
+      videoRef.current.muted = false;
+      setHasAudio(true);
     }
   };
 
   const handleVideoClick = () => {
-    if (videoRef.current && !hasAudio) {
-      videoRef.current.muted = false;
-      setHasAudio(true);
+    if (videoRef.current) {
+      if (videoRef.current.paused) {
+        videoRef.current.play();
+        setIsPlaying(true);
+      } else {
+        videoRef.current.pause();
+        setIsPlaying(false);
+      }
     }
   };
 
@@ -117,17 +134,25 @@ export function OnboardingFlow({
                 loop
                 muted
                 playsInline
-                className="w-full h-full object-cover rounded-lg"
+                onClick={handleVideoClick}
+                className="w-full h-full object-cover rounded-lg cursor-pointer"
               />
               {!hasAudio && (
                 <div
-                  className="absolute top-4 left-4 cursor-pointer"
-                  onClick={handleVideoClick}
+                  className="absolute top-4 left-4 cursor-pointer z-10"
+                  onClick={handleAudioClick}
                 >
                   <div className="bg-black/60 backdrop-blur-sm rounded-lg px-4 py-2 hover:bg-black/80 transition-all">
                     <p className="text-white text-sm font-medium">
                       Click for audio
                     </p>
+                  </div>
+                </div>
+              )}
+              {!isPlaying && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="bg-black/50 backdrop-blur-sm rounded-full p-6">
+                    <Play className="w-12 h-12 text-white fill-white" />
                   </div>
                 </div>
               )}
@@ -142,17 +167,25 @@ export function OnboardingFlow({
                 loop
                 muted
                 playsInline
-                className="w-full h-full object-cover rounded-lg"
+                onClick={handleVideoClick}
+                className="w-full h-full object-cover rounded-lg cursor-pointer"
               />
               {!hasAudio && (
                 <div
-                  className="absolute top-4 left-4 cursor-pointer"
-                  onClick={handleVideoClick}
+                  className="absolute top-4 left-4 cursor-pointer z-10"
+                  onClick={handleAudioClick}
                 >
                   <div className="bg-black/60 backdrop-blur-sm rounded-lg px-4 py-2 hover:bg-black/80 transition-all">
                     <p className="text-white text-sm font-medium">
                       Click for audio
                     </p>
+                  </div>
+                </div>
+              )}
+              {!isPlaying && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="bg-black/50 backdrop-blur-sm rounded-full p-6">
+                    <Play className="w-12 h-12 text-white fill-white" />
                   </div>
                 </div>
               )}
@@ -167,17 +200,25 @@ export function OnboardingFlow({
                 loop
                 muted
                 playsInline
-                className="w-full h-full object-cover rounded-lg"
+                onClick={handleVideoClick}
+                className="w-full h-full object-cover rounded-lg cursor-pointer"
               />
               {!hasAudio && (
                 <div
-                  className="absolute top-4 left-4 cursor-pointer"
-                  onClick={handleVideoClick}
+                  className="absolute top-4 left-4 cursor-pointer z-10"
+                  onClick={handleAudioClick}
                 >
                   <div className="bg-black/60 backdrop-blur-sm rounded-lg px-4 py-2 hover:bg-black/80 transition-all">
                     <p className="text-white text-sm font-medium">
                       Click for audio
                     </p>
+                  </div>
+                </div>
+              )}
+              {!isPlaying && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="bg-black/50 backdrop-blur-sm rounded-full p-6">
+                    <Play className="w-12 h-12 text-white fill-white" />
                   </div>
                 </div>
               )}
@@ -192,17 +233,25 @@ export function OnboardingFlow({
                 loop
                 muted
                 playsInline
-                className="w-full h-full object-cover rounded-lg"
+                onClick={handleVideoClick}
+                className="w-full h-full object-cover rounded-lg cursor-pointer"
               />
               {!hasAudio && (
                 <div
-                  className="absolute top-4 left-4 cursor-pointer"
-                  onClick={handleVideoClick}
+                  className="absolute top-4 left-4 cursor-pointer z-10"
+                  onClick={handleAudioClick}
                 >
                   <div className="bg-black/60 backdrop-blur-sm rounded-lg px-4 py-2 hover:bg-black/80 transition-all">
                     <p className="text-white text-sm font-medium">
                       Click for audio
                     </p>
+                  </div>
+                </div>
+              )}
+              {!isPlaying && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="bg-black/50 backdrop-blur-sm rounded-full p-6">
+                    <Play className="w-12 h-12 text-white fill-white" />
                   </div>
                 </div>
               )}
