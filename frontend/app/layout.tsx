@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   ),
   openGraph: {
     title: "Lavoe",
-    description: "AI for music production",
+    description: "Cursor for music production",
     images: [
       {
         url: "/preview.png",
