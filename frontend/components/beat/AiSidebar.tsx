@@ -993,11 +993,11 @@ export default function AiSidebar({
 
             {/* Show default state when in agent mode with no messages */}
             {mode === "agent" && messages.length === 0 && (
-              <div className="bg-white/5 rounded-lg p-4">
-                <h3 className="text-white/80 font-medium text-sm mb-3">
+              <div className="bg-white/[0.02] rounded-lg p-4">
+                <h3 className="text-white/50 font-medium text-sm mb-3">
                   Toolbox
                 </h3>
-                <ul className="space-y-2 text-[#B7BCC5]/80 text-sm">
+                <ul className="space-y-2 text-[#B7BCC5]/60 text-sm">
                   <li className="flex items-start">
                     <span className="mr-2">•</span>
                     <span>Move blocks on the timeline</span>
