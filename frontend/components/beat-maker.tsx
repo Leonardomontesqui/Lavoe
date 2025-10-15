@@ -18,7 +18,8 @@ const TIMELINE_MEASURES = 64; // measures instead of seconds
 const PIXELS_PER_MEASURE = TIMELINE_WIDTH / TIMELINE_MEASURES;
 const START_MEASURE = 1; // Transport starts at measure 1
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 
 export default function BeatMaker() {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -1167,6 +1168,30 @@ export default function BeatMaker() {
     });
   };
 
+  const handleDeleteTrack = (trackId: string) => {
+    // Find the track index
+    const trackIndex = tracks.findIndex((t) => t.id === trackId);
+    if (trackIndex === -1) return;
+
+    // Stop and clean up any audio elements associated with this track
+    const audioElement = trackAudioRefs.current.get(trackId);
+    if (audioElement) {
+      audioElement.pause();
+      if (audioElement.src && audioElement.src.startsWith("blob:")) {
+        URL.revokeObjectURL(audioElement.src);
+      }
+      trackAudioRefs.current.delete(trackId);
+    }
+
+    // Remove all blocks that are on this track
+    setBlocks((prev) => prev.filter((b) => b.track !== trackIndex));
+
+    // Remove the track from the tracks list
+    setTracks((prev) => prev.filter((t) => t.id !== trackId));
+
+    console.log(`🗑️ Deleted track ${trackId} and all associated blocks`);
+  };
+
   const handleDeleteSelectedBlock = () => {
     if (!selectedBlock) return;
 
@@ -1174,13 +1199,15 @@ export default function BeatMaker() {
     const blockToDelete = blocks.find((b) => b.id === selectedBlock);
     if (!blockToDelete) return;
 
+    // Find the track for this block
+    const trackForBlock = tracks[blockToDelete.track];
+
     // If audio is currently playing for this block, stop it
     const isInBlockWindow =
       currentTime >= blockToDelete.startTime &&
       currentTime < blockToDelete.startTime + blockToDelete.duration;
 
     if (isInBlockWindow) {
-      const trackForBlock = tracks[blockToDelete.track];
       const audioKey = blockToDelete.trackId || trackForBlock?.id;
       if (audioKey) {
         const audioElement = trackAudioRefs.current.get(audioKey);
@@ -1196,6 +1223,26 @@ export default function BeatMaker() {
     // Remove the block from UI state
     setBlocks((prev) => prev.filter((b) => b.id !== selectedBlock));
     setSelectedBlock(null);
+
+    // Also delete the track that this block was on
+    if (trackForBlock) {
+      // Clean up audio element
+      const audioElement = trackAudioRefs.current.get(trackForBlock.id);
+      if (audioElement) {
+        audioElement.pause();
+        if (audioElement.src && audioElement.src.startsWith("blob:")) {
+          URL.revokeObjectURL(audioElement.src);
+        }
+        trackAudioRefs.current.delete(trackForBlock.id);
+      }
+
+      // Remove the track
+      setTracks((prev) => prev.filter((t) => t.id !== trackForBlock.id));
+
+      console.log(
+        `🗑️ Deleted block ${selectedBlock} and associated track ${trackForBlock.id}`
+      );
+    }
   };
 
   // Global key handler for Delete/Backspace to remove selected block
@@ -1235,6 +1282,7 @@ export default function BeatMaker() {
           onAddTrack={addTrack}
           onFileUpload={handleFileUpload}
           onRecordingComplete={handleRecordingComplete}
+          onDeleteTrack={handleDeleteTrack}
         />
       </div>
       <div className="flex-1 flex flex-col relative">
