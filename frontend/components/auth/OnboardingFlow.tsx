@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ppEditorialNew } from "@/lib/fonts";
+import { Play, Pause } from "lucide-react";
 
 interface OnboardingFlowProps {
   open: boolean;
@@ -21,7 +22,7 @@ const onboardingSteps = [
   {
     title: "Welcome to Lavoe",
     titleClassName: "flex items-center justify-center gap-2",
-    subtitle: "Everyone should make music",
+    subtitle: "Anyone can make music with AI",
   },
   {
     title: "Generate beats with AI",
@@ -44,6 +45,8 @@ export function OnboardingFlow({
   onSignIn,
 }: OnboardingFlowProps) {
   const [currentStep, setCurrentStep] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const isLastStep = currentStep === onboardingSteps.length - 1;
   const isFirstStep = currentStep === 0;
 
@@ -52,12 +55,26 @@ export function OnboardingFlow({
       onSignIn();
     } else {
       setCurrentStep(currentStep + 1);
+      setIsPlaying(false);
     }
   };
 
   const handleBack = () => {
     if (!isFirstStep) {
       setCurrentStep(currentStep - 1);
+      setIsPlaying(false);
+    }
+  };
+
+  const handlePlayPause = () => {
+    if (videoRef.current) {
+      if (videoRef.current.paused) {
+        videoRef.current.play();
+        setIsPlaying(true);
+      } else {
+        videoRef.current.pause();
+        setIsPlaying(false);
+      }
     }
   };
 
@@ -94,11 +111,97 @@ export function OnboardingFlow({
           )}
         </DialogHeader>
 
-        {/* Video Placeholder */}
-        <div className="w-full bg-muted rounded-lg border border-border flex items-center justify-center shadow-sm h-96">
-          <div className="text-muted-foreground text-sm opacity-60">
-            Video placeholder
-          </div>
+        {/* Video Content */}
+        <div className="w-full bg-muted rounded-lg border border-border flex items-center justify-center shadow-sm h-96 overflow-hidden relative">
+          {currentStep === 0 ? (
+            <>
+              <video
+                ref={videoRef}
+                key="overall-demo"
+                src="/overall-demo.mp4"
+                loop
+                playsInline
+                className="w-full h-full object-cover rounded-lg"
+              />
+              <div
+                className="absolute inset-0 flex items-center justify-center cursor-pointer"
+                onClick={handlePlayPause}
+              >
+                {!isPlaying && (
+                  <div className="bg-black/50 backdrop-blur-sm rounded-full p-6 hover:bg-black/70 transition-all">
+                    <Play className="w-12 h-12 text-white fill-white" />
+                  </div>
+                )}
+              </div>
+            </>
+          ) : currentStep === 1 ? (
+            <>
+              <video
+                ref={videoRef}
+                key="ai-generate"
+                src="/ai-audio-generate.mp4"
+                loop
+                playsInline
+                className="w-full h-full object-cover rounded-lg"
+              />
+              <div
+                className="absolute inset-0 flex items-center justify-center cursor-pointer"
+                onClick={handlePlayPause}
+              >
+                {!isPlaying && (
+                  <div className="bg-black/50 backdrop-blur-sm rounded-full p-6 hover:bg-black/70 transition-all">
+                    <Play className="w-12 h-12 text-white fill-white" />
+                  </div>
+                )}
+              </div>
+            </>
+          ) : currentStep === 2 ? (
+            <>
+              <video
+                ref={videoRef}
+                key="agent-mode"
+                src="/agent-mode.mp4"
+                loop
+                playsInline
+                className="w-full h-full object-cover rounded-lg"
+              />
+              <div
+                className="absolute inset-0 flex items-center justify-center cursor-pointer"
+                onClick={handlePlayPause}
+              >
+                {!isPlaying && (
+                  <div className="bg-black/50 backdrop-blur-sm rounded-full p-6 hover:bg-black/70 transition-all">
+                    <Play className="w-12 h-12 text-white fill-white" />
+                  </div>
+                )}
+              </div>
+            </>
+          ) : currentStep === 3 ? (
+            <>
+              <video
+                ref={videoRef}
+                key="overall-demo-2"
+                src="/overall-demo.mp4"
+                loop
+                playsInline
+                className="w-full h-full object-cover rounded-lg"
+              />
+              <div
+                className="absolute inset-0 flex items-center justify-center cursor-pointer"
+                onClick={handlePlayPause}
+              >
+                {!isPlaying && (
+                  <div className="bg-black/50 backdrop-blur-sm rounded-full p-6 hover:bg-black/70 transition-all">
+                    <Play className="w-12 h-12 text-white fill-white" />
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="text-muted-foreground text-sm opacity-60">
+              Video placeholder
+            </div>
+          )}
         </div>
 
         {/* Navigation */}
