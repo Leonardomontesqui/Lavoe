@@ -1,24 +1,9 @@
 "use client";
 
 import { useState, useRef } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ppEditorialNew } from "@/lib/fonts";
-import { Play } from "lucide-react";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { MobileLandingPage } from "./MobileLandingPage";
-
-interface OnboardingFlowProps {
-  open: boolean;
-  onComplete: () => void;
-  onSignIn: () => void;
-}
+import { Play, Maximize } from "lucide-react";
 
 const onboardingSteps = [
   {
@@ -41,23 +26,16 @@ const onboardingSteps = [
   },
 ];
 
-export function OnboardingFlow({
-  open,
-  onComplete,
-  onSignIn,
-}: OnboardingFlowProps) {
+export function MobileLandingPage() {
   const [currentStep, setCurrentStep] = useState(0);
   const [hasAudio, setHasAudio] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const isMobile = useIsMobile();
   const isLastStep = currentStep === onboardingSteps.length - 1;
   const isFirstStep = currentStep === 0;
 
   const handleNext = () => {
-    if (isLastStep) {
-      onSignIn();
-    } else {
+    if (!isLastStep) {
       setCurrentStep(currentStep + 1);
       setHasAudio(false);
       setIsPlaying(true);
@@ -92,47 +70,48 @@ export function OnboardingFlow({
     }
   };
 
+  const handleFullscreen = () => {
+    if (videoRef.current) {
+      if (videoRef.current.requestFullscreen) {
+        videoRef.current.requestFullscreen();
+      } else if ((videoRef.current as any).webkitRequestFullscreen) {
+        (videoRef.current as any).webkitRequestFullscreen();
+      } else if ((videoRef.current as any).mozRequestFullScreen) {
+        (videoRef.current as any).mozRequestFullScreen();
+      }
+    }
+  };
+
   const currentStepData = onboardingSteps[currentStep];
 
-  // Mobile: Show full screen landing page
-  if (isMobile && open) {
-    return <MobileLandingPage />;
-  }
-
-  // Desktop: Dialog modal
   return (
-    <Dialog open={open}>
-      <DialogContent
-        showCloseButton={false}
-        onEscapeKeyDown={(e) => e.preventDefault()}
-        onPointerDownOutside={(e) => e.preventDefault()}
-        onInteractOutside={(e) => e.preventDefault()}
-        className="!w-[50vw] !max-w-4xl h-[650px] px-12 bg-[#151515] border-[#1a1a1a]"
-      >
-        <DialogHeader className="text-center space-y-3">
+    <div className="fixed inset-0 z-50 bg-[#151515] overflow-hidden flex flex-col">
+      <div className="flex-1 flex flex-col justify-center px-6 py-12">
+        {/* Title and subtitle */}
+        <div className="text-center space-y-4 mb-10">
           {currentStep === 0 ? (
-            <DialogTitle
-              className={`${ppEditorialNew.className} text-5xl text-foreground font-normal flex items-center justify-center gap-2`}
+            <h1
+              className={`${ppEditorialNew.className} text-3xl text-foreground font-normal flex items-center justify-center gap-2`}
             >
               <span>Welcome to</span>
               <span>Lavoe</span>
-            </DialogTitle>
+            </h1>
           ) : (
-            <DialogTitle
-              className={`${ppEditorialNew.className} text-5xl text-foreground font-normal text-center`}
+            <h1
+              className={`${ppEditorialNew.className} text-3xl text-foreground font-normal text-center`}
             >
               {currentStepData.title}
-            </DialogTitle>
+            </h1>
           )}
           {currentStepData.subtitle && (
-            <DialogDescription className="text-base text-gray-400 font-normal text-center">
+            <p className="text-sm text-gray-400 font-normal text-center px-4">
               {currentStepData.subtitle}
-            </DialogDescription>
+            </p>
           )}
-        </DialogHeader>
+        </div>
 
         {/* Video Content */}
-        <div className="w-full bg-muted rounded-lg border border-border flex items-center justify-center shadow-sm h-96 overflow-hidden relative">
+        <div className="w-full bg-muted rounded-lg border border-border flex items-center justify-center shadow-sm aspect-video overflow-hidden relative mb-10">
           {currentStep === 0 ? (
             <>
               <video
@@ -151,17 +130,25 @@ export function OnboardingFlow({
                   className="absolute top-4 left-4 cursor-pointer z-10"
                   onClick={handleAudioClick}
                 >
-                  <div className="bg-black/60 backdrop-blur-sm rounded-lg px-4 py-2 hover:bg-black/80 transition-all">
-                    <p className="text-white text-sm font-medium">
+                  <div className="bg-black/60 backdrop-blur-sm rounded-lg px-3 py-1.5 hover:bg-black/80 transition-all">
+                    <p className="text-white text-xs font-medium">
                       Click for audio
                     </p>
                   </div>
                 </div>
               )}
+              <div
+                className="absolute top-4 right-4 cursor-pointer z-10"
+                onClick={handleFullscreen}
+              >
+                <div className="bg-black/60 backdrop-blur-sm rounded-lg p-2 hover:bg-black/80 transition-all">
+                  <Maximize className="w-4 h-4 text-white" />
+                </div>
+              </div>
               {!isPlaying && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="bg-black/50 backdrop-blur-sm rounded-full p-6">
-                    <Play className="w-12 h-12 text-white fill-white" />
+                  <div className="bg-black/50 backdrop-blur-sm rounded-full p-4">
+                    <Play className="w-8 h-8 text-white fill-white" />
                   </div>
                 </div>
               )}
@@ -184,17 +171,25 @@ export function OnboardingFlow({
                   className="absolute top-4 left-4 cursor-pointer z-10"
                   onClick={handleAudioClick}
                 >
-                  <div className="bg-black/60 backdrop-blur-sm rounded-lg px-4 py-2 hover:bg-black/80 transition-all">
-                    <p className="text-white text-sm font-medium">
+                  <div className="bg-black/60 backdrop-blur-sm rounded-lg px-3 py-1.5 hover:bg-black/80 transition-all">
+                    <p className="text-white text-xs font-medium">
                       Click for audio
                     </p>
                   </div>
                 </div>
               )}
+              <div
+                className="absolute top-4 right-4 cursor-pointer z-10"
+                onClick={handleFullscreen}
+              >
+                <div className="bg-black/60 backdrop-blur-sm rounded-lg p-2 hover:bg-black/80 transition-all">
+                  <Maximize className="w-4 h-4 text-white" />
+                </div>
+              </div>
               {!isPlaying && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="bg-black/50 backdrop-blur-sm rounded-full p-6">
-                    <Play className="w-12 h-12 text-white fill-white" />
+                  <div className="bg-black/50 backdrop-blur-sm rounded-full p-4">
+                    <Play className="w-8 h-8 text-white fill-white" />
                   </div>
                 </div>
               )}
@@ -217,17 +212,25 @@ export function OnboardingFlow({
                   className="absolute top-4 left-4 cursor-pointer z-10"
                   onClick={handleAudioClick}
                 >
-                  <div className="bg-black/60 backdrop-blur-sm rounded-lg px-4 py-2 hover:bg-black/80 transition-all">
-                    <p className="text-white text-sm font-medium">
+                  <div className="bg-black/60 backdrop-blur-sm rounded-lg px-3 py-1.5 hover:bg-black/80 transition-all">
+                    <p className="text-white text-xs font-medium">
                       Click for audio
                     </p>
                   </div>
                 </div>
               )}
+              <div
+                className="absolute top-4 right-4 cursor-pointer z-10"
+                onClick={handleFullscreen}
+              >
+                <div className="bg-black/60 backdrop-blur-sm rounded-lg p-2 hover:bg-black/80 transition-all">
+                  <Maximize className="w-4 h-4 text-white" />
+                </div>
+              </div>
               {!isPlaying && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="bg-black/50 backdrop-blur-sm rounded-full p-6">
-                    <Play className="w-12 h-12 text-white fill-white" />
+                  <div className="bg-black/50 backdrop-blur-sm rounded-full p-4">
+                    <Play className="w-8 h-8 text-white fill-white" />
                   </div>
                 </div>
               )}
@@ -250,17 +253,25 @@ export function OnboardingFlow({
                   className="absolute top-4 left-4 cursor-pointer z-10"
                   onClick={handleAudioClick}
                 >
-                  <div className="bg-black/60 backdrop-blur-sm rounded-lg px-4 py-2 hover:bg-black/80 transition-all">
-                    <p className="text-white text-sm font-medium">
+                  <div className="bg-black/60 backdrop-blur-sm rounded-lg px-3 py-1.5 hover:bg-black/80 transition-all">
+                    <p className="text-white text-xs font-medium">
                       Click for audio
                     </p>
                   </div>
                 </div>
               )}
+              <div
+                className="absolute top-4 right-4 cursor-pointer z-10"
+                onClick={handleFullscreen}
+              >
+                <div className="bg-black/60 backdrop-blur-sm rounded-lg p-2 hover:bg-black/80 transition-all">
+                  <Maximize className="w-4 h-4 text-white" />
+                </div>
+              </div>
               {!isPlaying && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="bg-black/50 backdrop-blur-sm rounded-full p-6">
-                    <Play className="w-12 h-12 text-white fill-white" />
+                  <div className="bg-black/50 backdrop-blur-sm rounded-full p-4">
+                    <Play className="w-8 h-8 text-white fill-white" />
                   </div>
                 </div>
               )}
@@ -273,27 +284,28 @@ export function OnboardingFlow({
         </div>
 
         {/* Navigation */}
-        <div className="flex justify-between pt-4">
+        <div className="flex flex-col gap-4">
+          <Button
+            onClick={handleNext}
+            disabled={isLastStep}
+            className={
+              isLastStep
+                ? "w-full h-12 bg-gradient-to-r from-pink-500 via-rose-500 to-orange-500 text-white border-0 opacity-50 cursor-not-allowed"
+                : "w-full h-12 bg-[#141414] text-foreground border border-border hover:bg-[#1a1a1a] transition-all"
+            }
+          >
+            {isLastStep ? "Sorry, only on desktop" : "Next"}
+          </Button>
           <Button
             variant="outline"
             onClick={handleBack}
             disabled={isFirstStep}
-            className="min-w-[100px] bg-[#141414] border-border text-muted-foreground hover:bg-[#1a1a1a] hover:text-foreground transition-all"
+            className="w-full h-12 bg-[#141414] border-border text-muted-foreground hover:bg-[#1a1a1a] hover:text-foreground transition-all"
           >
             Back
           </Button>
-          <Button
-            onClick={handleNext}
-            className={
-              isLastStep
-                ? "min-w-[100px] bg-gradient-to-r from-pink-500 via-rose-500 to-orange-500 text-white border-0 hover:opacity-80 transition-all"
-                : "min-w-[100px] bg-[#141414] text-foreground border border-border hover:bg-[#1a1a1a] transition-all"
-            }
-          >
-            {isLastStep ? "Sign in" : "Next"}
-          </Button>
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
 }
