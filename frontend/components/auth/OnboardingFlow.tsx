@@ -102,11 +102,11 @@ export function OnboardingFlow({
       >
         <DialogHeader className="text-center space-y-3">
           {currentStep === 0 ? (
-            <DialogTitle className="text-foreground font-normal flex items-center justify-center gap-2">
-              <span className="text-4xl">Welcome to</span>
-              <span className={`${ppEditorialNew.className} text-5xl`}>
-                Lavoe
-              </span>
+            <DialogTitle
+              className={`${ppEditorialNew.className} text-5xl text-foreground font-normal flex items-center justify-center gap-2`}
+            >
+              <span>Welcome to</span>
+              <span>Lavoe</span>
             </DialogTitle>
           ) : (
             <DialogTitle
