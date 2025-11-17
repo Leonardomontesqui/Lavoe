@@ -86,47 +86,22 @@ function TrackWaveform({
 }
 
 interface CatalogProps {
-  refreshTrigger?: number;
+  tracks: Track[];
+  loading: boolean;
   onAddToEditor?: (trackId: string, filename: string) => void;
+  onTrackDelete?: (trackId: string) => void;
 }
 
 export default function Catalog({
-  refreshTrigger,
+  tracks,
+  loading,
   onAddToEditor,
+  onTrackDelete,
 }: CatalogProps) {
-  const [tracks, setTracks] = useState<Track[]>([]);
-  const [loading, setLoading] = useState(true);
   const [playingTrack, setPlayingTrack] = useState<string | null>(null);
   const currentAudio = useRef<HTMLAudioElement | null>(null);
   const currentAudioUrl = useRef<string | null>(null);
   const currentTrackId = useRef<string | null>(null);
-
-  const fetchTracks = async () => {
-    try {
-      setLoading(true);
-      const response = await authFetch(`${BACKEND_URL}/tracks`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch tracks: ${response.statusText}`);
-      }
-      const tracksData = await response.json();
-      setTracks(tracksData);
-    } catch (error) {
-      console.error("Error fetching tracks:", error);
-      toast.error("Failed to load tracks");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchTracks();
-  }, []);
-
-  useEffect(() => {
-    if (refreshTrigger) {
-      fetchTracks();
-    }
-  }, [refreshTrigger]);
 
   const stopCurrentAudio = () => {
     try {
@@ -261,8 +236,10 @@ export default function Catalog({
         const msg = await response.text();
         throw new Error(msg || "Failed to delete track");
       }
-      // Optimistically remove from UI
-      setTracks((prev) => prev.filter((t) => t.track_id !== trackId));
+      // Notify parent to update tracks list
+      if (onTrackDelete) {
+        onTrackDelete(trackId);
+      }
       toast.success("Track removed from catalog");
     } catch (error) {
       console.error("Error deleting track:", error);
@@ -332,14 +309,6 @@ export default function Catalog({
       <div className="flex-shrink-0 p-4 border-b border-border">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold">Catalog Tracks</h3>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchTracks}
-            disabled={loading}
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-          </Button>
         </div>
       </div>
 

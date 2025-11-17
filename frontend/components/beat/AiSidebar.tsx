@@ -254,6 +254,17 @@ function EnhancedAIResponse({
   );
 }
 
+export interface Track {
+  track_id: string;
+  filename: string;
+  file_size: number;
+  created_at: string;
+  duration_seconds?: number;
+  sample_rate?: number;
+  processing_type?: string;
+  channels?: number;
+}
+
 export interface AiSidebarProps {
   aiPrompt: string;
   setAiPrompt: (v: string) => void;
@@ -268,6 +279,7 @@ export interface AiSidebarProps {
   onSpeedAdjust?: (blockId: string, speedFactor: number) => void;
   onLoop?: (blockId: string, times: number) => void;
   onAgentBusyChange?: (busy: boolean) => void;
+  onNewTrack?: (track: Track) => void;
 }
 
 export default function AiSidebar({
@@ -284,6 +296,7 @@ export default function AiSidebar({
   onSpeedAdjust,
   onLoop,
   onAgentBusyChange,
+  onNewTrack,
 }: AiSidebarProps) {
   const [mode, setMode] = useState<"beat" | "agent">("beat");
   const [activeTab, setActiveTab] = useState<"chat" | "tracks">("chat");
@@ -300,6 +313,44 @@ export default function AiSidebar({
 
   // Agent mode input state (separate from beatmaker aiPrompt)
   const [agentInput, setAgentInput] = useState("");
+
+  // Tracks state - managed at AiSidebar level to persist across tab switches
+  const [tracks, setTracks] = useState<Track[]>([]);
+  const [loadingTracks, setLoadingTracks] = useState(true);
+
+  // Fetch tracks once on mount
+  const fetchTracks = async () => {
+    try {
+      setLoadingTracks(true);
+      const response = await authFetch(`${BACKEND_URL}/tracks`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch tracks: ${response.statusText}`);
+      }
+      const tracksData = await response.json();
+      setTracks(tracksData);
+    } catch (error) {
+      console.error("Error fetching tracks:", error);
+    } finally {
+      setLoadingTracks(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTracks();
+  }, []);
+
+  // When a new track is generated, add it to the list optimistically
+  useEffect(() => {
+    if (tracksRefreshTrigger && tracksRefreshTrigger > 0) {
+      // Refetch to get the latest track
+      fetchTracks();
+    }
+  }, [tracksRefreshTrigger]);
+
+  // Handle track deletion
+  const handleTrackDelete = (trackId: string) => {
+    setTracks((prev) => prev.filter((t) => t.track_id !== trackId));
+  };
 
   // Set up client-side AI chat for Agent mode
   const { messages, sendMessage, status, error, addToolResult } = useChat({
@@ -1198,8 +1249,10 @@ export default function AiSidebar({
           className="flex-1 m-0 flex flex-col min-h-0"
         >
           <Catalog
-            refreshTrigger={tracksRefreshTrigger}
+            tracks={tracks}
+            loading={loadingTracks}
             onAddToEditor={onAddTrackToEditor}
+            onTrackDelete={handleTrackDelete}
           />
         </TabsContent>
       </Tabs>
