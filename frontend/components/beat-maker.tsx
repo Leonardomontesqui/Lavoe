@@ -6,8 +6,10 @@ import BeatTimeline from "@/components/beat/BeatTimeline";
 import AiSidebar from "@/components/beat/AiSidebar";
 import AgenticBlurOverlay from "@/components/beat/AgenticBlurOverlay";
 import { TracksSidebar } from "@/components/beat/TracksSidebar";
+import { BeatGenerationModal, GeneratedBeat } from "@/components/beat/BeatGenerationModal";
 import { MusicBlock, Track } from "@/components/beat/types";
 import { authFetch } from "@/lib/authFetch";
+import * as audioStorage from "@/lib/audioLocalStorage";
 
 const initialTracks: Track[] = [];
 
@@ -38,6 +40,10 @@ export default function BeatMaker() {
   const [generationStatus, setGenerationStatus] = useState<string>("");
   const [agentBusy, setAgentBusy] = useState(false);
   const [justResumed, setJustResumed] = useState(false);
+
+  // Beat generation modal state
+  const [showBeatModal, setShowBeatModal] = useState(false);
+  const [beatModalPrompt, setBeatModalPrompt] = useState("");
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -361,6 +367,166 @@ export default function BeatMaker() {
     } else {
       // Agent mode handled via AiSidebar status; nothing to do here
     }
+  };
+
+  // Handler for beat prompt submission from timeline
+  const handleBeatPromptSubmit = (
+    prompt: string,
+    selectionBounds: { x: number; y: number; width: number; height: number }
+  ) => {
+    console.log("🎵 Beat prompt submitted:", prompt);
+    console.log("📐 Selection bounds:", selectionBounds);
+
+    // Open modal and start generation
+    setBeatModalPrompt(prompt);
+    setShowBeatModal(true);
+  };
+
+  // Generate beat for modal (returns GeneratedBeat)
+  const generateBeatForModal = async (prompt: string): Promise<GeneratedBeat> => {
+    console.log("🎹 Starting beat generation for modal...");
+    console.log("📝 Prompt:", prompt);
+
+    // Start track generation
+    console.log("🌐 Calling Beatoven API: POST /start_track_generation");
+    const response = await authFetch(
+      `${BACKEND_URL}/start_track_generation`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt: { text: prompt },
+          format: "mp3",
+          looping: false,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.error("❌ Beatoven API failed:", response.status, text);
+      throw new Error("Failed to start track generation");
+    }
+
+    const result = await response.json();
+    const taskId = result.task_id;
+    console.log("✅ Beatoven task started, task ID:", taskId);
+
+    // Poll for completion
+    console.log("⏳ Starting polling for task completion...");
+    const generatedTracks = await pollForBeatCompletion(taskId);
+
+    console.log("🎉 Beat generation complete! Tracks received:", generatedTracks);
+
+    return generatedTracks;
+  };
+
+  // Poll for beat completion (for modal)
+  const pollForBeatCompletion = async (taskId: string): Promise<GeneratedBeat> => {
+    const maxAttempts = 60;
+    let attempts = 0;
+
+    while (attempts < maxAttempts) {
+      attempts++;
+      console.log(`🔄 Polling attempt ${attempts}/${maxAttempts}...`);
+
+      const response = await authFetch(
+        `${BACKEND_URL}/get_generated_track?task_id=${taskId}`
+      );
+
+      if (!response.ok) {
+        console.error("❌ Poll request failed:", response.status);
+        throw new Error("Failed to check track status");
+      }
+
+      const result = await response.json();
+      console.log("📊 Poll result:", result.status);
+
+      if (result.status === "composed") {
+        console.log("✨ Track composed! Downloading audio files...");
+
+        // Download all audio files
+        const mainBlob = await downloadTrack(result.track_id);
+        const bassBlob = await downloadTrack(result.stems.bass);
+        const chordsBlob = await downloadTrack(result.stems.chords);
+        const melodyBlob = await downloadTrack(result.stems.melody);
+        const percussionBlob = await downloadTrack(result.stems.percussion);
+
+        // Store in localStorage
+        console.log("💾 Storing audio files in localStorage...");
+        await audioStorage.storeAudio(result.track_id, mainBlob, { type: "main" });
+        await audioStorage.storeAudio(result.stems.bass, bassBlob, { type: "bass" });
+        await audioStorage.storeAudio(result.stems.chords, chordsBlob, { type: "chords" });
+        await audioStorage.storeAudio(result.stems.melody, melodyBlob, { type: "melody" });
+        await audioStorage.storeAudio(result.stems.percussion, percussionBlob, { type: "percussion" });
+
+        console.log("✅ All audio files stored successfully!");
+
+        return {
+          main: {
+            id: result.track_id,
+            blob: mainBlob,
+            url: URL.createObjectURL(mainBlob),
+          },
+          stems: {
+            bass: {
+              id: result.stems.bass,
+              blob: bassBlob,
+              url: URL.createObjectURL(bassBlob),
+            },
+            chords: {
+              id: result.stems.chords,
+              blob: chordsBlob,
+              url: URL.createObjectURL(chordsBlob),
+            },
+            melody: {
+              id: result.stems.melody,
+              blob: melodyBlob,
+              url: URL.createObjectURL(melodyBlob),
+            },
+            percussion: {
+              id: result.stems.percussion,
+              blob: percussionBlob,
+              url: URL.createObjectURL(percussionBlob),
+            },
+          },
+        };
+      }
+
+      if (result.status === "failed" || result.status === "error") {
+        console.error("❌ Track generation failed:", result);
+        throw new Error("Track generation failed");
+      }
+
+      // Still processing, wait and try again
+      console.log("⏱️  Still processing, waiting 10 seconds...");
+      await new Promise((resolve) => setTimeout(resolve, 10000));
+    }
+
+    console.error("⏰ Polling timeout after 10 minutes");
+    throw new Error("Track generation timed out");
+  };
+
+  // Download track from backend
+  const downloadTrack = async (trackId: string): Promise<Blob> => {
+    console.log(`📥 Downloading track: ${trackId}`);
+    const response = await authFetch(
+      `${BACKEND_URL}/tracks/${trackId}/download`
+    );
+
+    if (!response.ok) {
+      console.error(`❌ Failed to download track ${trackId}`);
+      throw new Error(`Failed to download track ${trackId}`);
+    }
+
+    const data = await response.json();
+    const audioResponse = await fetch(data.url);
+    const blob = await audioResponse.blob();
+
+    console.log(`✅ Downloaded track ${trackId}, size: ${blob.size} bytes`);
+    return blob;
   };
 
   const generateBeatovenTrack = async (prompt: string) => {
@@ -1306,6 +1472,7 @@ export default function BeatMaker() {
           onBlockMove={handleBlockMove}
           insertionPoint={insertionPoint}
           totalMeasures={TIMELINE_MEASURES}
+          onBeatPromptSubmit={handleBeatPromptSubmit}
         />
       </div>
       <AiSidebar
@@ -1442,6 +1609,17 @@ export default function BeatMaker() {
           );
         }}
       />
+
+      {/* Beat Generation Modal */}
+      <BeatGenerationModal
+        isOpen={showBeatModal}
+        onClose={() => setShowBeatModal(false)}
+        prompt={beatModalPrompt}
+        onGenerate={generateBeatForModal}
+      />
+
+      {/* Agentic Blur Overlay */}
+      <AgenticBlurOverlay isLoading={agentBusy} />
     </div>
   );
 }
