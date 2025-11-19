@@ -19,7 +19,10 @@ export interface BeatTimelineProps {
   ) => void;
   insertionPoint?: { time: number; trackIndex: number } | null;
   totalMeasures: number;
-  onBeatPromptSubmit?: (prompt: string, selectionBounds: { x: number; y: number; width: number; height: number }) => void;
+  onBeatPromptSubmit?: (
+    prompt: string,
+    selectionBounds: { x: number; y: number; width: number; height: number }
+  ) => void;
 }
 
 function TimeMarkers({ totalMeasures }: { totalMeasures: number }) {
@@ -235,7 +238,13 @@ export default function BeatTimeline({
 
   const handlePromptSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!beatPrompt.trim() || !selectionStart || !selectionEnd || !onBeatPromptSubmit) return;
+    if (
+      !beatPrompt.trim() ||
+      !selectionStart ||
+      !selectionEnd ||
+      !onBeatPromptSubmit
+    )
+      return;
 
     // Calculate selection bounds for the modal
     const bounds = {
