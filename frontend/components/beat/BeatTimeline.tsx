@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useRef } from "react";
+import { ReactNode, useRef, useState } from "react";
 import { MusicBlock, Track } from "./types";
 import { Waveform } from "./Waveform";
 
@@ -19,6 +19,10 @@ export interface BeatTimelineProps {
   ) => void;
   insertionPoint?: { time: number; trackIndex: number } | null;
   totalMeasures: number;
+  onBeatPromptSubmit?: (
+    prompt: string,
+    selectionBounds: { x: number; y: number; width: number; height: number }
+  ) => void;
 }
 
 function TimeMarkers({ totalMeasures }: { totalMeasures: number }) {
@@ -78,9 +82,28 @@ export default function BeatTimeline({
   onBlockMove,
   insertionPoint,
   totalMeasures,
+  onBeatPromptSubmit,
 }: BeatTimelineProps) {
   // Store drag offset to maintain relative cursor position during drag
   const dragOffsetRef = useRef<{ x: number; y: number } | null>(null);
+
+  // Minimum number of visual rows so a single track isn't oversized
+  const visualRows = Math.max(tracks.length, 4);
+
+  // Selection rectangle state
+  const [selectionStart, setSelectionStart] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+  const [selectionEnd, setSelectionEnd] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [showPromptInput, setShowPromptInput] = useState(false);
+  const [beatPrompt, setBeatPrompt] = useState("");
+  const timelineRef = useRef<HTMLDivElement>(null);
+
   const handleTimelineClick = (event: React.MouseEvent<HTMLDivElement>) => {
     if (!onTimelineClick || !event.currentTarget) return;
 
@@ -139,8 +162,113 @@ export default function BeatTimeline({
     document.addEventListener("mouseup", handleMouseUp);
   };
 
-  // Minimum number of visual rows so a single track isn't oversized
-  const visualRows = Math.max(tracks.length, 4);
+  // Selection handlers - snap to grid
+  const handleSelectionMouseDown = (
+    event: React.MouseEvent<HTMLDivElement>
+  ) => {
+    // Only start selection on left click with Shift key held down, and not when clicking on a block
+    if (
+      event.button !== 0 ||
+      !event.shiftKey ||
+      (event.target as HTMLElement).draggable
+    )
+      return;
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+
+    // Snap to grid
+    const START_MEASURE = 1;
+    const span = Math.max(1, totalMeasures - START_MEASURE);
+    const measureWidth = rect.width / span;
+    const gridCellHeight = rect.height / 16; // Use the 16 horizontal grid lines
+
+    // Calculate which measure and grid row we're in
+    const measureIndex = Math.floor(x / measureWidth);
+    const gridRowIndex = Math.floor(y / gridCellHeight);
+
+    // Snap to grid boundaries
+    const snappedX = measureIndex * measureWidth;
+    const snappedY = gridRowIndex * gridCellHeight;
+
+    // Selection height is 2 grid cells
+    setSelectionStart({ x: snappedX, y: snappedY });
+    setSelectionEnd({
+      x: snappedX + measureWidth,
+      y: snappedY + gridCellHeight * 2,
+    });
+    setIsSelecting(true);
+  };
+
+  const handleSelectionMouseMove = (
+    event: React.MouseEvent<HTMLDivElement>
+  ) => {
+    if (!isSelecting || !selectionStart || !timelineRef.current) return;
+
+    const rect = timelineRef.current.getBoundingClientRect();
+    const x = Math.max(0, Math.min(event.clientX - rect.left, rect.width));
+
+    // Snap to grid
+    const START_MEASURE = 1;
+    const span = Math.max(1, totalMeasures - START_MEASURE);
+    const measureWidth = rect.width / span;
+    const gridCellHeight = rect.height / 16; // Use the 16 horizontal grid lines
+
+    // Calculate which measure we're hovering over
+    const measureIndex = Math.floor(x / measureWidth);
+
+    // Snap to grid boundaries (inclusive of the cell we're hovering over)
+    // Keep height locked to 2 grid cells
+    const snappedX = (measureIndex + 1) * measureWidth;
+    const snappedY = selectionStart.y + gridCellHeight * 2;
+
+    setSelectionEnd({ x: snappedX, y: snappedY });
+  };
+
+  const handleSelectionMouseUp = () => {
+    if (isSelecting) {
+      setIsSelecting(false);
+      // Show prompt input after selection is complete
+      if (selectionStart && selectionEnd) {
+        setShowPromptInput(true);
+      }
+    }
+  };
+
+  const handlePromptSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (
+      !beatPrompt.trim() ||
+      !selectionStart ||
+      !selectionEnd ||
+      !onBeatPromptSubmit
+    )
+      return;
+
+    // Calculate selection bounds for the modal
+    const bounds = {
+      x: Math.min(selectionStart.x, selectionEnd.x),
+      y: Math.min(selectionStart.y, selectionEnd.y),
+      width: Math.abs(selectionEnd.x - selectionStart.x),
+      height: Math.abs(selectionEnd.y - selectionStart.y),
+    };
+
+    onBeatPromptSubmit(beatPrompt, bounds);
+
+    // Clear selection and prompt
+    setSelectionStart(null);
+    setSelectionEnd(null);
+    setShowPromptInput(false);
+    setBeatPrompt("");
+  };
+
+  const handlePromptCancel = () => {
+    setShowPromptInput(false);
+    setBeatPrompt("");
+    setSelectionStart(null);
+    setSelectionEnd(null);
+  };
 
   return (
     <div className="flex-1 p-6">
@@ -163,8 +291,13 @@ export default function BeatTimeline({
         <div className="mt-8 relative flex-1">
           {/* Timeline grid and blocks */}
           <div
+            ref={timelineRef}
             className="flex-1 min-h-[calc(100vh-280px)] bg-background border border-border rounded relative overflow-hidden cursor-crosshair"
             onClick={handleTimelineClick}
+            onMouseDown={handleSelectionMouseDown}
+            onMouseMove={handleSelectionMouseMove}
+            onMouseUp={handleSelectionMouseUp}
+            onMouseLeave={handleSelectionMouseUp}
             onDragOver={(e) => {
               e.preventDefault();
               e.dataTransfer.dropEffect = "move";
@@ -246,6 +379,60 @@ export default function BeatTimeline({
                 }%`,
               }}
             />
+
+            {/* Selection Rectangle Overlay */}
+            {selectionStart && selectionEnd && (
+              <div
+                className="absolute bg-gray-500/30 border border-gray-400/50 z-20 pointer-events-none"
+                style={{
+                  left: `${Math.min(selectionStart.x, selectionEnd.x)}px`,
+                  top: `${Math.min(selectionStart.y, selectionEnd.y)}px`,
+                  width: `${Math.abs(selectionEnd.x - selectionStart.x)}px`,
+                  height: `${Math.abs(selectionEnd.y - selectionStart.y)}px`,
+                }}
+              />
+            )}
+
+            {/* Prompt Input Overlay */}
+            {showPromptInput && selectionStart && selectionEnd && (
+              <div
+                className="absolute z-30 pointer-events-auto"
+                style={{
+                  left: `${Math.min(selectionStart.x, selectionEnd.x)}px`,
+                  top: `${Math.min(selectionStart.y, selectionEnd.y) - 60}px`,
+                  minWidth: `${Math.abs(selectionEnd.x - selectionStart.x)}px`,
+                }}
+              >
+                <form
+                  onSubmit={handlePromptSubmit}
+                  className="bg-background border border-border rounded-lg shadow-lg p-3"
+                >
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={beatPrompt}
+                      onChange={(e) => setBeatPrompt(e.target.value)}
+                      placeholder="Describe the beat you want..."
+                      className="flex-1 px-3 py-2 bg-background border border-border rounded text-sm focus:outline-none focus:border-primary"
+                      autoFocus
+                    />
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-primary text-primary-foreground rounded text-sm font-medium hover:bg-primary/90 transition-colors"
+                    >
+                      Generate
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handlePromptCancel}
+                      className="px-3 py-2 bg-secondary text-secondary-foreground rounded text-sm hover:bg-secondary/80 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
 
             {/* Insertion Point Indicator */}
             {insertionPoint && (
