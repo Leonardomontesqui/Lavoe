@@ -19,19 +19,8 @@ import {
 import { toast } from "sonner";
 import { Waveform } from "./Waveform";
 import { authFetch } from "@/lib/authFetch";
-
-interface Track {
-  track_id: string;
-  filename: string;
-  file_size: number;
-  created_at: string;
-  duration_seconds?: number;
-  sample_rate?: number;
-  processing_type?: string;
-  channels?: number;
-}
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+import { ApiTrack } from "./types";
+import { BACKEND_URL } from "./_constants/ai-sidebar-constants";
 
 function TrackWaveform({
   trackId,
@@ -86,7 +75,7 @@ function TrackWaveform({
 }
 
 interface CatalogProps {
-  tracks: Track[];
+  tracks: ApiTrack[];
   loading: boolean;
   onAddToEditor?: (trackId: string, filename: string) => void;
   onTrackDelete?: (trackId: string) => void;
