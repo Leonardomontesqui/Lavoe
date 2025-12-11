@@ -179,7 +179,7 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await streamText({
-      model: openai('gpt-4o-mini'),
+      model: openai("gpt-4o-mini"),
       messages,
       tools: {
         extractHarmonics,
@@ -192,14 +192,13 @@ export async function POST(req: NextRequest) {
 2. **Process Reverb** - Add spatial reverb effects with customizable room size, damping, and wet/dry levels
 3. **Chop Audio** - Intelligently segment audio into chops based on harmonic onset detection and clustering
 
-**Instructions:**
+**Instructions:*
 - Always be helpful and explain what each tool does
 - When users upload audio, suggest appropriate processing based on their goals
 - For beat making, chopping is often the most useful starting point
 - Explain the parameters and their effects when using tools
 - If a tool fails, provide clear feedback and suggest alternatives
-- You can chain operations (e.g., extract harmonics first, then chop the result)
-- Always describe the results in musical terms that producers understand
+- You can chain operations (e.g., extract harmonics first, then chop the result, then loop)
 
 **Audio Format:**
 - All audio should be provided as Base64 encoded data
